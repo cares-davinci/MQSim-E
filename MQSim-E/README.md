@@ -1,13 +1,6 @@
-# MQSim: A Simulator for Modern NVMe and SATA SSDs
+# MQSim-E: A Simulator for Enterprise SSD
+letter: MQSim-E: An Enterprise SSD Simulator (CAL'22)
 
-
-## Usage in Linux
-Run following commands:
-	
-```
-$ make
-$ ./MQSim -i <SSD Configuration File> -w <Workload Definition File>
-```
 
 ## Usage in Windows
 
