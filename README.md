@@ -1,5 +1,5 @@
 # MQSim-E: A Simulator for Enterprise SSD
-letter: MQSim-E: An Enterprise SSD Simulator (CAL'22)
+thesis: MQSim-E: An Enterprise SSD Simulator (CAL'22)
 
 
 ## Usage in Windows
