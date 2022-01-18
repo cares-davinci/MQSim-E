@@ -9,7 +9,7 @@
 	</Host_Parameter_Set>
 	<Device_Parameter_Set>
 			 <Seed>321</Seed>
-			 <Enabled_Preconditioning>false</Enabled_Preconditioning> <!-- preconditioning is not avaliable -->
+			 <Enabled_Preconditioning>false</Enabled_Preconditioning> <!-- preconditioning is not yet updated -->
 			 <Memory_Type>FLASH</Memory_Type>
 			 <HostInterface_Type>NVME</HostInterface_Type>
 			 <IO_Queue_Depth>65535</IO_Queue_Depth>
