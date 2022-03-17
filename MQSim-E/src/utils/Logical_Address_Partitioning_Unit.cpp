@@ -138,8 +138,15 @@ namespace Utils
 				for (flash_chip_ID_type chip_id = 0; chip_id < stream_chip_ids[stream_id].size(); chip_id++) {
 					for (flash_die_ID_type die_id = 0; die_id < stream_die_ids[stream_id].size(); die_id++) {
 						for (flash_plane_ID_type plane_id = 0; plane_id < stream_plane_ids[stream_id].size(); plane_id++) {
+#if PATCH_PRECOND
+							lsa_count += (LHA_type)((block_no_per_plane * page_no_per_block * sector_no_per_page * ALIGN_UNIT_SIZE * (1.0 - overprovisioning_ratio) *
+								1.0 / double(resource_list[stream_channel_ids[stream_id][channel_id]][stream_chip_ids[stream_id][chip_id]][stream_die_ids[stream_id][die_id]][stream_plane_ids[stream_id][plane_id]])));
+
+#else
 							lsa_count += (LHA_type)((block_no_per_plane * page_no_per_block * sector_no_per_page * (1.0 - overprovisioning_ratio) *
 								1.0 / double(resource_list[stream_channel_ids[stream_id][channel_id]][stream_chip_ids[stream_id][chip_id]][stream_die_ids[stream_id][die_id]][stream_plane_ids[stream_id][plane_id]])));
+
+#endif						
 						}
 					}
 				}

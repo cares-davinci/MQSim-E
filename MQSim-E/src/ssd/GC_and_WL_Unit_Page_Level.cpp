@@ -116,10 +116,15 @@ namespace SSD_Components
 						}
 
 						pbke = block_manager->Get_plane_bookkeeping_entry(address);
-						if (address.ChannelID == 0 && address.ChipID == 0 && address.PlaneID == 0 && address.BlockID == 247) {
-							//std::cout << "[DEBUG GC-read_pages()] "block id: 247, erase block (pg movements should have been processed)" << std::endl;
+
+#if PATCH_PRECOND
+						if (address.ChannelID == 2 && address.ChipID == 0 && address.DieID == 0 && address.PlaneID == 2 && block->BlockID == 0) {
+							//std::cout << "[DEBUG PRECOND] Erased 2002 0 block" << std::endl;
+							//exit(1);
 						}
+#endif
 						pbke->Ongoing_erase_operations.erase(pbke->Ongoing_erase_operations.find(block->BlockID));
+
 						block_manager->Add_erased_block_to_pool(address);
 						block_manager->GC_WL_finished(address);
 
@@ -297,9 +302,9 @@ namespace SSD_Components
 	{
 		int read_count = 0;
 		int read_count_subpg = 0;
-		int cur_subpage_offset = 0;
+		//int cur_subpage_offset = 0;
 		//bool stop_increase_page_offset = false;
-		bool subpg_read = false;
+		//bool subpg_read = false;
 
 		NVM_Transaction_Flash_RD* gc_read = NULL;
 		NVM_Transaction_Flash_WR* gc_write = NULL;
@@ -308,17 +313,18 @@ namespace SSD_Components
 
 		tsu->Prepare_for_transaction_submit();
 
+
 		//cur_page_offset, read_count = NAND FLASH page unit count, cur_subpage_offset = Mapping granularity unit count
 		for (; cur_page_offset < pages_no_per_block; cur_page_offset++) {
 			//parallel process across all planes in SSD. 
 			//std::cout << "[DEBUG GC-read_pages()] cur_page_offset: " << cur_page_offset<< std::endl;
-			for (int victim_index = 0; victim_index < gc_unit_count; victim_index++) {
+			for (int victim_index = 0; victim_index < gc_unit_count; victim_index++) { 
 				block = victim_blocks[victim_index];
 				if (block->Stream_id != 0) {
 					std::cout << "[DOODU ERROR] Stream_id ! =0 (read_pages()) " << std::endl;
 					exit(1);
 				}
-				for (cur_subpage_offset = 0; cur_subpage_offset < ALIGN_UNIT_SIZE; cur_subpage_offset++) {
+				for (; cur_subpage_offset < ALIGN_UNIT_SIZE; cur_subpage_offset++) {
 					//std::cout << "[DEBUG GC-read_pages()] cur_page_offset: " << cur_page_offset << ", " << cur_subpage_offset << std::endl;
 					//std::cout << "cur_subpage_offset: " << cur_subpage_offset << std::endl;
 
@@ -340,7 +346,12 @@ namespace SSD_Components
 							tsu->Submit_transaction(gc_write);
 						}
 						else {
-							//std::cout << "[DEBUG GC] gc read subpg ppa :" << address_mapping_unit->Convert_address_to_ppa(gc_candidate_address) << std::endl;
+#if PATCH_PRECOND
+							//std::cout << "[DEBUG PRECOND] gc read subpg ppa :" << address_mapping_unit->Convert_address_to_ppa(gc_candidate_address) << ", address(block): " << gc_candidate_address.ChannelID << gc_candidate_address.ChipID << gc_candidate_address.DieID << gc_candidate_address.PlaneID << gc_candidate_address.BlockID << ", page: " << gc_candidate_address.PageID << ", " << gc_candidate_address.subPageID << std::endl;
+							if (gc_candidate_address.ChannelID == 2 && gc_candidate_address.ChipID == 0 && gc_candidate_address.DieID == 0 && gc_candidate_address.PlaneID == 2 && gc_candidate_address.BlockID == 0) {
+								//std::cout << "[DEBUG PRECOND] (valid) gc read subpg ppa :" << address_mapping_unit->Convert_address_to_ppa(gc_candidate_address) << ", address(block): " << gc_candidate_address.ChannelID << gc_candidate_address.ChipID << gc_candidate_address.DieID << gc_candidate_address.PlaneID << gc_candidate_address.BlockID << ", page: " << gc_candidate_address.PageID << ", " << gc_candidate_address.subPageID << std::endl;
+							}
+#endif
 							gc_read = new NVM_Transaction_Flash_RD(Transaction_Source_Type::GC_WL, block->Stream_id, sector_no_per_page / ALIGN_UNIT_SIZE * SECTOR_SIZE_IN_BYTE,
 								NO_LPA, address_mapping_unit->Convert_address_to_ppa(gc_candidate_address), gc_candidate_address, NULL, 0, NULL, 0, INVALID_TIME_STAMP);
 							gc_write = new NVM_Transaction_Flash_WR(Transaction_Source_Type::GC_WL, block->Stream_id, sector_no_per_page / ALIGN_UNIT_SIZE * SECTOR_SIZE_IN_BYTE,
@@ -349,6 +360,7 @@ namespace SSD_Components
 							gc_write->RelatedErase = NULL; //gc_erase_tr;
 							gc_read->RelatedWrite = gc_write;
 							waiting_submit_transaction.push_back(gc_read);
+							//std::cout << "[DEBUG PRECOND] (valid) gc read subpg addr: " << gc_candidate_address.ChannelID << gc_candidate_address.ChipID << gc_candidate_address.DieID << gc_candidate_address.PlaneID << gc_candidate_address.BlockID << ", pageid: " << gc_candidate_address.PageID << gc_candidate_address.subPageID << std::endl;
 							total_gc_rw_interval_ER++;
 
 							if (gc_read->Stream_id != 0) {
@@ -357,25 +369,34 @@ namespace SSD_Components
 							}
 						}
 						read_count_subpg++;
-						subpg_read = true;
+						// read_count_subpg should be aligned to ALIGN_UNIT_SIZE [DOODU]
+						if ((read_count_subpg == gc_unit_count * ALIGN_UNIT_SIZE)) {
+							break;
+						}
 					}
-				}
-				if (read_count_subpg != 0 && subpg_read) {
-					read_count++; //nand page granularity
-					subpg_read = false;
-				}
+					else {
+						gc_candidate_address = gc_victim_address[victim_index];
+						gc_candidate_address.PageID = cur_page_offset;
+						gc_candidate_address.subPageID = cur_subpage_offset;
+						//if (gc_candidate_address.ChannelID == 2 && gc_candidate_address.ChipID == 0 && gc_candidate_address.DieID == 0 && gc_candidate_address.PlaneID == 2 && gc_candidate_address.BlockID == 0) {
+							////std::cout << "[DEBUG PRECOND] (invalid) gc read subpg ppa :" << address_mapping_unit->Convert_address_to_ppa(gc_candidate_address) << ", address(block): " << gc_candidate_address.ChannelID << gc_candidate_address.ChipID << gc_candidate_address.DieID << gc_candidate_address.PlaneID << gc_candidate_address.BlockID << ", page: " << gc_candidate_address.PageID << ", " << gc_candidate_address.subPageID << std::endl;
+						//}
+					}
+				}// check subpgs in a page
 
 
-				if ((read_count_subpg == gc_unit_count*ALIGN_UNIT_SIZE)) {
+				if (cur_subpage_offset == ALIGN_UNIT_SIZE) { 
+					cur_subpage_offset = 0; 
+				} 
+
+
+				if ((read_count_subpg == gc_unit_count * ALIGN_UNIT_SIZE)) {
 					break;
 				}
-
-			}
-
+			} // check in a parallelism blocks (= gc_unit_count)
 			if ((read_count_subpg == gc_unit_count * ALIGN_UNIT_SIZE)) {
 				break;
 			}
-
 		} //end of for (; cur_page_offset ; ;)
 
 
@@ -394,6 +415,20 @@ namespace SSD_Components
 		//std::cout << "[before] waiting_submit_transaction: " << waiting_submit_transaction.size() << std::endl;
 
 #if try_combine_GCread
+
+//#if PATCH_PRECOND
+		/* LPA is not yet determined.
+		if (waiting_submit_transaction.size() > 1) {
+			for (std::list<NVM_Transaction*>::const_iterator it = waiting_submit_transaction.begin(); it != waiting_submit_transaction.end(); it++) {
+				if (((NVM_Transaction_Flash_RD*)(*it))->LPA == 106885) {
+					std::cout << "[DEBUG PRECOND] push tr (lpa: 106885) into waiting_submit_transaction" << std::endl;
+
+				}
+			}
+		}
+		*/
+//#endif
+
 		stable_sort(waiting_submit_transaction.begin(), waiting_submit_transaction.end(), cmp_gc);
 
 		if (waiting_submit_transaction.size() > 1) {
@@ -736,6 +771,7 @@ namespace SSD_Components
 		}
 
 		cur_page_offset = 0;
+		cur_subpage_offset = 0;
 		cur_state_index = 0;
 
 		//int roundup_valid = ((valid_page_count/ALIGN_UNIT_SIZE + gc_unit_count - 1) / gc_unit_count) * gc_unit_count; //fix it. not all pg has ALIGN_UNIT_SIZE valid subpgs.
@@ -763,7 +799,7 @@ namespace SSD_Components
 			token_per_write = token_per_write * (1-reduced_factor);
 		}
 
-		if ((Stats::GC_count % 1000) == 0)
+		if ((Stats::GC_count % 200) == 0)
 		{
 			PRINT_MESSAGE(Stats::GC_count << " New Victim: " << gc_candidate_block_id << "  stream : " <<victim_blocks[0]->Stream_id << "  valid : " << valid_page_count << " cur_token : " << token_per_write << " free blk : " << free_block_count << " c_token : " << token << " U: " << Stats::Utilization  << " W: " << WAF[(Stats::WAF_index-1) % 10]); 
 		}

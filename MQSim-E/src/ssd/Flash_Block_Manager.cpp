@@ -155,9 +155,19 @@ namespace SSD_Components
 
 	void Flash_Block_Manager::Allocate_Pages_in_block_and_invalidate_remaining_for_preconditioning(const stream_id_type stream_id, const NVM::FlashMemory::Physical_Page_Address& plane_address, std::vector<NVM::FlashMemory::Physical_Page_Address>& page_addresses)
 	{
-		if(page_addresses.size() > pages_no_per_block) {
+#if PATCH_PRECOND
+		if (stream_id == 255) {
+			std::cout << "[DEBUG PRECOND] stream_id = 255" << std::endl;
+			exit(1);
+		}
+		if (page_addresses.size() > pages_no_per_block * ALIGN_UNIT_SIZE) {
 			PRINT_ERROR("Error while precondition a physical block: the size of the address list is larger than the pages_no_per_block!")
 		}
+#else
+		if (page_addresses.size() > pages_no_per_block) {
+			PRINT_ERROR("Error while precondition a physical block: the size of the address list is larger than the pages_no_per_block!")
+		}
+#endif
 			
 		PlaneBookKeepingType *plane_record = &plane_manager[plane_address.ChannelID][plane_address.ChipID][plane_address.DieID][plane_address.PlaneID];
 		if (plane_record->Data_wf[stream_id]->Current_page_write_index > 0) {
@@ -165,6 +175,43 @@ namespace SSD_Components
 		}
 
 
+#if PATCH_PRECOND
+		//Assign (validate) physical addresses
+		//std::cout << "page_addresses.size(): " << page_addresses.size() << std::endl; //it depends on preconditioning occupancy parameter 
+#if PATCH_PRECOND
+		for (int i = 0; i < (page_addresses.size()); i++) {
+#else
+		for (int i = 0; i < (page_addresses.size() / ALIGN_UNIT_SIZE) * ALIGN_UNIT_SIZE; i++) {
+#endif
+			plane_record->Valid_subpages_count++;
+			plane_record->Free_subpages_count--;
+			page_addresses[i].BlockID = plane_record->Data_wf[stream_id]->BlockID;
+			page_addresses[i].subPageID = plane_record->Data_wf[stream_id]->Current_subpage_write_index++;
+			page_addresses[i].PageID = plane_record->Data_wf[stream_id]->Current_page_write_index;
+			if (plane_record->Data_wf[stream_id]->Current_subpage_write_index == ALIGN_UNIT_SIZE) {
+				plane_record->Data_wf[stream_id]->Current_page_write_index++;
+#if PATCH_PRECOND
+				//if (plane_record->Data_wf[stream_id]->Current_page_write_index == pages_no_per_block) break;
+#endif
+				plane_record->Data_wf[stream_id]->Current_subpage_write_index = 0;
+				plane_record->Valid_pages_count++;
+				plane_record->Free_pages_count--;
+			}
+			else {
+				page_addresses[i].PageID = plane_record->Data_wf[stream_id]->Current_page_write_index;
+			}
+			plane_record->Check_bookkeeping_correctness(page_addresses[i]);
+#if PATCH_PRECOND
+			Block_Pool_Slot_Type* block = &(plane_record->Blocks[page_addresses[i].BlockID]);
+			if (page_addresses[i].ChannelID == 2 && page_addresses[i].ChipID == 0 && page_addresses[i].DieID == 0 && page_addresses[i].PlaneID == 2 && page_addresses[i].BlockID == 0) {
+				//std::cout << "[DEBUG PRECOND] validate 20020 block and pageid: " << page_addresses[i].PageID << ", " << page_addresses[i].subPageID << std::endl;
+				if (Is_Subpage_valid(block, page_addresses[i].PageID, page_addresses[i].subPageID)) {
+					//std::cout << "[DEBUG PRECOND] validated well" << std::endl;
+				}
+			}
+#endif
+		}
+#else
 		//Assign physical addresses
 		for (int i = 0; i < page_addresses.size(); i++) {
 			plane_record->Valid_pages_count++;
@@ -173,10 +220,51 @@ namespace SSD_Components
 			page_addresses[i].PageID = plane_record->Data_wf[stream_id]->Current_page_write_index++;
 			plane_record->Check_bookkeeping_correctness(page_addresses[i]);
 		}
+#endif
 
 
 		//Invalidate the remaining pages in the block
+#if PATCH_PRECOND
+		NVM::FlashMemory::Physical_Page_Address target_address(plane_address);
+		while (plane_record->Data_wf[stream_id]->Current_page_write_index < pages_no_per_block) {
+#if PATCH_PRECOND
+			for (int subpg = plane_record->Data_wf[stream_id]->Current_subpage_write_index; subpg < ALIGN_UNIT_SIZE; subpg++) {
+#else
+			for (int subpg = 0; subpg < ALIGN_UNIT_SIZE; subpg++) {
+#endif
+				plane_record->Free_subpages_count--;
+				target_address.BlockID = plane_record->Data_wf[stream_id]->BlockID;
+				target_address.PageID = plane_record->Data_wf[stream_id]->Current_page_write_index;
+				target_address.subPageID = plane_record->Data_wf[stream_id]->Current_subpage_write_index++;
+				if (plane_record->Data_wf[stream_id]->Current_subpage_write_index == ALIGN_UNIT_SIZE) {
+					plane_record->Data_wf[stream_id]->Current_page_write_index++;
+					plane_record->Data_wf[stream_id]->Current_subpage_write_index = 0;
+					plane_record->Invalid_pages_count++;
+					plane_record->Free_pages_count--;
+				}
+				Invalidate_subpage_in_block_for_preconditioning(stream_id, target_address);
 
+#if PATCH_PRECOND
+				Block_Pool_Slot_Type* block = &(plane_record->Blocks[target_address.BlockID]);
+				if (target_address.ChannelID == 2 && target_address.ChipID == 0 && target_address.DieID == 0 && target_address.PlaneID == 2 && target_address.BlockID == 0) {
+					if (!Is_Subpage_valid(block, target_address.PageID, target_address.subPageID)) {
+						//std::cout << "[DEBUG PRECOND] Invalidated well" << std::endl;
+					}
+				}
+#endif
+
+				plane_record->Check_bookkeeping_correctness(plane_address);
+				//std::cout << "[DEBUG PRECOND] Blk, Page, subPage: " << target_address.BlockID << ", " << target_address.PageID << ", " << target_address.subPageID << std::endl;
+				//std::cout << "[DEBUG PRECOND] Invalid/valid/free pages: " << plane_record->Invalid_pages_count << ", " << plane_record->Valid_pages_count << ", " << plane_record->Free_pages_count << std::endl;
+				//std::cout << "[DEBUG PRECOND] Invalid/valid/free subpages: " << plane_record->Invalid_subpages_count << ", " << plane_record->Valid_subpages_count << ", " << plane_record->Free_subpages_count << std::endl;
+#if PATCH_PRECOND
+				if (target_address.ChannelID == 2 && target_address.ChipID == 0 && target_address.DieID == 0 && target_address.PlaneID == 2 && target_address.BlockID == 0) {
+					//std::cout << "[DEBUG PRECOND] invalidated 20020 block and pageid: " << target_address.PageID << ", " << target_address.subPageID << std::endl;
+				}
+#endif
+			}
+		}
+#else
 		NVM::FlashMemory::Physical_Page_Address target_address(plane_address);
 		while (plane_record->Data_wf[stream_id]->Current_page_write_index < pages_no_per_block) {
 			plane_record->Free_pages_count--;
@@ -185,7 +273,7 @@ namespace SSD_Components
 			Invalidate_page_in_block_for_preconditioning(stream_id, target_address);
 			plane_record->Check_bookkeeping_correctness(plane_address);
 		}
-
+#endif
 
 		//Update the write frontier
 		plane_record->Data_wf[stream_id] = plane_record->Get_a_free_block(stream_id, false);
@@ -223,17 +311,23 @@ namespace SSD_Components
 		plane_record->Check_bookkeeping_correctness(page_address);
 	}
 
+
+
 	inline void Flash_Block_Manager::Invalidate_subpage_in_block(const stream_id_type stream_id, const NVM::FlashMemory::Physical_Page_Address& page_address)
 	{
 		PlaneBookKeepingType* plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
 		plane_record->Invalid_subpages_count++;
 		plane_record->Valid_subpages_count--;
-
+		
 		if (plane_record->Blocks[page_address.BlockID].Stream_id != stream_id) {
 			PRINT_MESSAGE("Page Info " << page_address.ChannelID << " " << page_address.ChipID << " " << page_address.DieID << " " << page_address.PlaneID << " " << page_address.BlockID << " " << page_address.PageID << ", subPg: "<<page_address.subPageID<< " Stream: " << plane_record->Blocks[page_address.BlockID].Stream_id);
 			PRINT_ERROR("Inconsistent status in the Invalidate_subpage_in_block function! The accessed block is not allocated to stream " << stream_id)
 		}
-
+#if PATCH_PRECOND
+		if (page_address.ChannelID == 2 && page_address.ChipID == 0 && page_address.DieID == 0 && page_address.PlaneID == 2 && page_address.BlockID == 0 && page_address.PageID == 0 && page_address.subPageID == 0) {
+			//std::cout << "[DEBUG PRECOND] 2002 000 invalidated" << std::endl;
+		}
+#endif
 		plane_record->Blocks[page_address.BlockID].Invalid_subpage_count++;
 		plane_record->Blocks[page_address.BlockID].Invalid_Subpage_bitmap[(page_address.PageID*ALIGN_UNIT_SIZE + page_address.subPageID) / 64] |= ((uint64_t)0x1) << (((page_address.PageID * ALIGN_UNIT_SIZE) + page_address.subPageID) % 64);
 
@@ -261,6 +355,7 @@ namespace SSD_Components
 		}
 		plane_record->Blocks[page_address.BlockID].Invalid_page_count++;
 		plane_record->Blocks[page_address.BlockID].Invalid_page_bitmap[page_address.PageID / 64] |= ((uint64_t)0x1) << (page_address.PageID % 64);
+
 	}
 
 	inline void Flash_Block_Manager::Invalidate_subpage_in_block_for_preconditioning(const stream_id_type stream_id, const NVM::FlashMemory::Physical_Page_Address& page_address)
@@ -272,7 +367,7 @@ namespace SSD_Components
 		}
 		plane_record->Blocks[page_address.BlockID].Invalid_subpage_count++;
 		plane_record->Blocks[page_address.BlockID].Invalid_Subpage_bitmap[(page_address.PageID * ALIGN_UNIT_SIZE + page_address.subPageID) / 64] |= ((uint64_t)0x1) << (((page_address.PageID * ALIGN_UNIT_SIZE) + page_address.subPageID) % 64);
-	
+
 	
 	}
 
@@ -285,6 +380,7 @@ namespace SSD_Components
 		plane_record->Invalid_subpages_count -= block->Invalid_subpage_count;
 
 		Stats::Block_erase_histogram[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID][block->Erase_count]--;
+
 		block->Erase();
 		Stats::Block_erase_histogram[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID][block->Erase_count]++;
 		plane_record->Add_to_free_block_pool(block, gc_and_wl_unit->Use_dynamic_wearleveling());

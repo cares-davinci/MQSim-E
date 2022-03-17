@@ -176,7 +176,7 @@ namespace SSD_Components
 
 				page_status_type temp = ~(0xffffffffffffffff << (int)transaction_size); // 
 				access_status_bitmap = temp << (int)(internal_lsa % host_interface->sectors_per_subpage);
-				//printf("access_status_bitmap: %lx", access_status_bitmap);
+				//printf("access_status_bitmap: %lx", access_status_bitmap); //flag0309
 			}
 			else if (user_request->Type == UserRequestType::WRITE) {
 				transaction_size = host_interface->sectors_per_subpage - (unsigned int)(lsa % host_interface->sectors_per_subpage);
@@ -185,9 +185,10 @@ namespace SSD_Components
 				}
 				lpa = internal_lsa / host_interface->sectors_per_subpage;
 
-				page_status_type temp = ~(0xffffffffffffffff << (int)transaction_size); // 
-				access_status_bitmap = temp << (int)(internal_lsa % host_interface->sectors_per_subpage); //write_sectors_bitmap
-				//printf("access_status_bitmap: %lx", access_status_bitmap);
+				//access_status_bitmap is used when check update read is necessary or not. CHECK allocate_page_in_plane_for_user_write [DOODU]
+				page_status_type temp = ~(0xffffffffffffffff << (int)transaction_size ); //flag0309 
+				access_status_bitmap = temp << (int)(internal_lsa % host_interface->sectors_per_subpage); // = write_sectors_bitmap
+				//printf("access_status_bitmap: 0x%lx", access_status_bitmap); //0xff
 			}
 			//std::cout << "tr size: " << transaction_size << std::endl;
 #else

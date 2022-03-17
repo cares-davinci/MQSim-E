@@ -108,6 +108,7 @@ namespace SSD_Components
 		int gc_pending_write_count; //mapping granularity count 
 		int gc_pending_erase_count;
 		unsigned int cur_page_offset;
+		unsigned int cur_subpage_offset;
 		bool new_victim_required;
 		int gc_unit_count;
 
