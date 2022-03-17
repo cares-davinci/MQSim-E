@@ -4,6 +4,8 @@
 #define LOG_USER_READ 0
 #define LOG_USER_WRITE 0
 
+#define PATCH_PRECOND 1
+
 
 #define ALIGN_UNIT_SIZE 4 // Flash pand page size / address mapping unit granularity. For example, when nand page size: 16KB and mapping granularity: 4KB, BUFFERING_SCALE_4K should be 4 (16KB/4KB).
 	#define BUFFERING_SCALE_4K 4 //This value should be same to ALIGN_UNIT_SIZE.
