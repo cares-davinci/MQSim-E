@@ -73,7 +73,12 @@ namespace NVM
 		void Flash_Chip::Change_memory_status_preconditioning(const NVM_Memory_Address* address, const void* status_info)
 		{
 			Physical_Page_Address* flash_address = (Physical_Page_Address*)address;
+#if PATCH_PRECOND
+			//Dies[flash_address->DieID]->Planes[flash_address->PlaneID]->Blocks[flash_address->BlockID]->Pages[flash_address->PageID].Metadata.LPA = *(LPA_type*)status_info;
+			Dies[flash_address->DieID]->Planes[flash_address->PlaneID]->Blocks[flash_address->BlockID]->Pages[flash_address->PageID].SubPages[flash_address->subPageID].Metadata.LPA = *(LPA_type*)status_info;
+#else
 			Dies[flash_address->DieID]->Planes[flash_address->PlaneID]->Blocks[flash_address->BlockID]->Pages[flash_address->PageID].Metadata.LPA = *(LPA_type*)status_info;
+#endif
 		}
 		
 		void Flash_Chip::Setup_triggers()
