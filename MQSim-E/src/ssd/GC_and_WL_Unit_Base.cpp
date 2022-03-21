@@ -72,9 +72,6 @@ namespace SSD_Components
 				switch (transaction->Type)
 				{
 					case Transaction_Type::READ:
-#if PATCH_PRECOND
-						
-#endif
 						_my_instance->block_manager->Read_transaction_serviced(transaction->Address);
 						break;
 					case Transaction_Type::WRITE:
@@ -94,11 +91,7 @@ namespace SSD_Components
 				
 				return;
 		}
-#if PATCH_PRECOND
-		if (transaction->LPA == 106885) {
-			//std::cout << "[DEBUG PRECOND] GC gonna allocate new page for LPA: " << transaction->LPA << std::endl;
-		}
-#endif
+
 		switch (transaction->Type) {
 			case Transaction_Type::READ:
 			{
@@ -139,22 +132,7 @@ namespace SSD_Components
 						RelatedWrite->write_sectors_bitmap = page_status_bitmap;
 						RelatedWrite->LPA = transaction->LPA;
 						RelatedWrite->RelatedRead = NULL;
-#if PATCH_PRECOND
 						
-						if (((NVM_Transaction_Flash_RD*)transaction)->RelatedRead_SUB.size() > 0) {
-							//std::cout << "[DEBUG PRECOND] RelatedRead->RelatedRead_SUB.size()>0. have to allocate new page for them" << std::endl;
-							//std::cout << "RelatedWrite_SUB's size: " << ((NVM_Transaction_Flash_WR*)transaction)->RelatedWrite_SUB.size() << std::endl;
-							if (((NVM_Transaction_Flash_RD*)transaction)->RelatedRead_SUB.size() != 0) {
-								for (int idx = 0; idx < ((NVM_Transaction_Flash_RD*)transaction)->RelatedRead_SUB.size(); idx++) {
-									if (((NVM_Transaction_Flash_RD*)transaction)->RelatedRead_SUB[idx]->LPA == 106885) {
-										//std::cout << "[DEBUG PRECOND] RelatedRead_SUB's LPA: " << ((NVM_Transaction_Flash_RD*)transaction)->LPA << std::endl;
-									}
-								}
-							}
-							//exit(1);
-						}
-						
-#endif
 						_my_instance->address_mapping_unit->Allocate_new_page_for_gc(RelatedWrite, false);
 
 						_my_instance->waiting_writeback_transaction.push_back(RelatedWrite);
@@ -265,6 +243,7 @@ namespace SSD_Components
 
 				// TEMP.
 				_my_instance->address_mapping_unit->Start_servicing_writes_for_overfull_plane(transaction->Address);
+
 				_my_instance->address_mapping_unit->Start_servicing_writes_for_overfull();
 
 				
@@ -388,14 +367,9 @@ namespace SSD_Components
 			}
 		}
 
-		//The block shouldn't have an ongoing program request (gc victim's all pages must already be written)
+		//The block shouldn't have an ongoing program request (all pages must already be written)
 		if (plane_record->Blocks[gc_wl_candidate_block_id].Ongoing_user_program_count > 0) {
-#if PATCH_PRECOND
-			std::cout << "block id:"<< plane_record->Blocks[gc_wl_candidate_block_id].BlockID<<"'s Ongoing_user_program_count > 0 "<< plane_record->Blocks[gc_wl_candidate_block_id].Ongoing_user_program_count << std::endl;
-#else
-			std::cout << "block id:" << plane_record->Blocks[gc_wl_candidate_block_id].BlockID << "'s Ongoing_user_program_count > 0 " << plane_record->Blocks[gc_wl_candidate_block_id].Ongoing_user_program_count << std::endl;
-
-#endif
+			std::cout << "flag1: "<< plane_record->Blocks[gc_wl_candidate_block_id].Ongoing_user_program_count << std::endl;
 			return false;
 		}
 

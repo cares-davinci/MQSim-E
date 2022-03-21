@@ -86,7 +86,6 @@ namespace SSD_Components
 			LPA_type no_of_logical_pages_in_steadystate = (LPA_type)(stat->Initial_occupancy_ratio * Address_Mapping_Unit->Get_logical_pages_count(stat->Stream_id));
 			std::cout << "[DEBUG PRECOND] no_of_logical_pages_in_steadystate: " << no_of_logical_pages_in_steadystate << std::endl;
 #endif
-
 			//Step 1: generate LPAs that are accessed in the steady-state
 			Utils::Address_Distribution_Type decision_dist_type = stat->Address_distribution_type;
 			std::map<LPA_type, page_status_type> lpa_set_for_preconditioning;//Stores the accessed LPAs
@@ -105,15 +104,14 @@ namespace SSD_Components
 
 			LPA_type max_lpa = Convert_host_logical_address_to_device_address(max_lha) - 1;
 #if PATCH_PRECOND
-			total_accessed_cmt_entries += (unsigned int)(Convert_host_logical_address_to_device_address(max_lha) / (page_size_in_sectors/ALIGN_UNIT_SIZE) - Convert_host_logical_address_to_device_address(min_lha) / (page_size_in_sectors/ALIGN_UNIT_SIZE)) + 1;
+			total_accessed_cmt_entries += (unsigned int)(Convert_host_logical_address_to_device_address(max_lha) / (page_size_in_sectors / ALIGN_UNIT_SIZE) - Convert_host_logical_address_to_device_address(min_lha) / (page_size_in_sectors / ALIGN_UNIT_SIZE)) + 1;
 #else
 			total_accessed_cmt_entries += (unsigned int)(Convert_host_logical_address_to_device_address(max_lha) / page_size_in_sectors - Convert_host_logical_address_to_device_address(min_lha) / page_size_in_sectors) + 1;
 #endif
 			bool hot_range_finished = false;//Used for fast address generation in hot/cold traffic mode
 			LHA_type hot_region_end_lsa = 0, hot_lha_used_for_generation = 0;//Used for fast address generation in hot/cold traffic mode
 			LPA_type last_hot_lpa = 0;
-			
-			std::cout << "[DEBUG PRECOND] min_lpa, max_lpa: " << min_lpa << "," << max_lpa << std::endl;
+
 
 			if (stat->Type == Utils::Workload_Type::SYNTHETIC)
 			{
@@ -185,7 +183,6 @@ namespace SSD_Components
 				{
 					//Check if enough LPAs could be generated within the working set of the flow
 //					if ((max_lpa - min_lpa) < 1.1 * no_of_logical_pages_in_steadystate)
-					std::cout << "[DEBUG PRECOND] no_of_logical_pages_in_steadystate*1.01: " << no_of_logical_pages_in_steadystate * 1.01 << ", max_lpa, min_lpa: " << max_lpa << ", " << min_lpa << std::endl;
 #if PATCH_PRECOND
 					//if ((max_lpa - min_lpa) * ALIGN_UNIT_SIZE < 1.01 * no_of_logical_pages_in_steadystate) //doodu flag0307. this goes to infinite loop
 					if ((max_lpa - min_lpa) < 1.01 * no_of_logical_pages_in_steadystate)
@@ -203,8 +200,7 @@ namespace SSD_Components
 						if ((max_lpa - min_lpa) < 1.01 * no_of_logical_pages_in_steadystate)
 						{
 							no_of_logical_pages_in_steadystate = (unsigned int)(double(max_lpa - min_lpa) * 0.999);
-							//PRINT_MESSAGE(no_of_logical_pages_in_steadystate);
-							std::cout << "[DEBUG PRECOND] Changed no_of_logical_pages_in_steadystate: " << no_of_logical_pages_in_steadystate << std::endl;
+							PRINT_MESSAGE(no_of_logical_pages_in_steadystate);
 						}
 					}
 					break;
@@ -218,7 +214,6 @@ namespace SSD_Components
 
 				while (lpa_set_for_preconditioning.size() < no_of_logical_pages_in_steadystate)
 				{
-					//if((lpa_set_for_preconditioning.size()) %200000 == 0) std::cout << "[DEBUG PRECOND] (perform_precondition) lpa_set_for_preconditioning.size(): " << lpa_set_for_preconditioning.size()<< std::endl;
 					if (random_request_type_generator->Uniform(0, 1) <= stat->Read_ratio)
 						is_read = true;
 
@@ -316,8 +311,6 @@ namespace SSD_Components
 					unsigned int transaction_size = 0;
 					page_status_type access_status_bitmap = 0;
 					LPA_type max_lpa_within_device = Convert_host_logical_address_to_device_address(stat->Max_LHA) - Convert_host_logical_address_to_device_address(stat->Min_LHA);
-					
-					//size: average request size
 					while (hanled_sectors_count < size)
 					{
 
@@ -332,17 +325,11 @@ namespace SSD_Components
 							transaction_size = size - hanled_sectors_count;
 						}
 						LPA_type lpa = Convert_host_logical_address_to_device_address(lsa);
-
-						//bitmap in sector unit in the mapping granularity page (4KB or 8KB or 16KB) [DOODU]
-						//access_status_bitmap: which sector is accessed by lsa in the page (according to ALIGN_UNIT_SIZE)
 						page_status_type access_status_bitmap = Find_NVM_subunit_access_bitmap(lsa);
-						//std::cout << std::hex << "[DEBUG PRECOND] access_status_bitmap: 0x" << access_status_bitmap << std::endl;
 
 						lsa = lsa + transaction_size;
-						//std::cout << "[DEBUG PRECOND] target lsa: " << lsa << std::endl;
 						hanled_sectors_count += transaction_size;
 
-						//printf("[DEBUG PRECOND] (perform_preconditioning) access_status_bitmap: 0x%lx\n", access_status_bitmap); //flag0309
 						if (lpa_set_for_preconditioning.find(lpa) == lpa_set_for_preconditioning.end()) {
 							lpa_set_for_preconditioning[lpa] = access_status_bitmap;
 							//The lpas in trace_lpas_sorted_histogram are those that are actually accessed by the application
@@ -356,9 +343,8 @@ namespace SSD_Components
 						} else {
 							lpa_set_for_preconditioning[lpa] = access_status_bitmap | lpa_set_for_preconditioning[lpa];
 						}
-					} //EOF while()
+					}
 				}
-				//std::cout << "[DEBUG PRECOND] FLAG3 finished" << std::endl;
 			} //sythentic workload end
 			 else {
 				//Step 1-1: Read LPAs are preferred for steady-state since each read should be written before the actual access
@@ -478,6 +464,7 @@ namespace SSD_Components
 			std::vector<double> steadystate_block_status_probability;//The probability distribution function of the number of valid pages in a block in the steadystate
 			double rho = stat->Initial_occupancy_ratio * (1 - over_provisioning_ratio) / (1 - double(GC_and_WL_Unit->Get_minimum_number_of_free_pages_before_GC()) / block_no_per_plane);
 			decision_dist_type = stat->Address_distribution_type;
+			
 			switch (decision_dist_type) {
 			case Utils::Address_Distribution_Type::RANDOM_HOTCOLD://Estimate the steady-state of the hot/cold traffic based on the steady-state of the uniform traffic
 			{
@@ -486,7 +473,6 @@ namespace SSD_Components
 					case GC_Block_Selection_Policy_Type::GREEDY://Based on: B. Van Houdt, "A mean field model for a class of garbage collection algorithms in flash-based solid state drives", SIGMETRICS 2013.
 					case GC_Block_Selection_Policy_Type::FIFO://Could be estimated with greedy for large page_no_per_block values, as mentioned in //Based on: B. Van Houdt, "A mean field model for a class of garbage collection algorithms in flash-based solid state drives", SIGMETRICS 2013.
 					{
-
 						for (unsigned int i = 0; i <= page_no_per_block; i++) {
 							steadystate_block_status_probability.push_back(Utils::Combination_count(page_no_per_block, i) * std::pow(rho, i) * std::pow(1 - rho, page_no_per_block - i));
 						}
@@ -704,6 +690,7 @@ namespace SSD_Components
 			}
 			std::cout << "[DEBUG PRECOND] sum of = steadystate_block_status_probability[]: " << sum << std::endl;
 #endif
+
 			//Due to some precision errors the sum may not be exactly equal to 1
 			if (sum > 1.001 || sum < 0.99) {
 				PRINT_ERROR("Wrong probability distribution function for the number of valid pages in flash blocks in the steady-state! It is not safe to continue preconditioning!")
@@ -811,7 +798,6 @@ namespace SSD_Components
 						auto itr = trace_lpas_sorted_histogram.begin();
 						while (Address_Mapping_Unit->Get_current_cmt_occupancy_for_stream(stat->Stream_id) < no_of_entries_in_cmt) {
 							std::advance(itr, random_step);
-							if(stat->Stream_id !=0) PRINT_ERROR("[DEBUG PRECOND] Stream_id !=0 when setting cmt for preconditioning")
 							Address_Mapping_Unit->Bring_to_CMT_for_preconditioning(stat->Stream_id, (*itr).second);
 							if (trace_lpas_sorted_histogram.size() > 1) {
 								trace_lpas_sorted_histogram.erase(itr++);
@@ -1078,19 +1064,18 @@ namespace SSD_Components
 	{
 #if PATCH_PRECOND
 		//return lha / (page_size_in_sectors/ALIGN_UNIT_SIZE);
-		return lha / (page_size_in_sectors/ALIGN_UNIT_SIZE); /// ALIGN_UNIT_SIZE;
+		return lha / (page_size_in_sectors / ALIGN_UNIT_SIZE); /// ALIGN_UNIT_SIZE;
 #else
 		return lha / page_size_in_sectors;
 #endif
 	}
 
-	//subunit: sector [DOODU]
-	page_status_type FTL::Find_NVM_subunit_access_bitmap(LHA_type lha) 
+	page_status_type FTL::Find_NVM_subunit_access_bitmap(LHA_type lha)
 	{
 #if PATCH_PRECOND
 		//check access_status_bitmap assignment in 'segment_user_request()' [DOODU]
 		//std::cout << "[DEBUG PRECOND] lha: " << lha << std::endl;
-		return ((page_status_type)~(0xffffffffffffffff << (int)1)) << (int)(lha % (page_size_in_sectors/ALIGN_UNIT_SIZE));
+		return ((page_status_type)~(0xffffffffffffffff << (int)1)) << (int)(lha % (page_size_in_sectors / ALIGN_UNIT_SIZE));
 #else
 		return ((page_status_type)~(0xffffffffffffffff << (int)1)) << (int)(lha % page_size_in_sectors);
 #endif

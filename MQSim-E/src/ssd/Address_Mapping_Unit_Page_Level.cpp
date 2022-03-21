@@ -184,9 +184,8 @@ namespace SSD_Components
 	{
 		Total_physical_pages_no = total_physical_sectors_no / sectors_no_per_page;
 		max_logical_sector_address = total_logical_sectors_no;
-
 #if PATCH_PRECOND
-		Total_logical_pages_no = (max_logical_sector_address / (sectors_no_per_page/ALIGN_UNIT_SIZE)) + (max_logical_sector_address % sectors_no_per_page == 0 ? 0 : 1);
+		Total_logical_pages_no = (max_logical_sector_address / (sectors_no_per_page / ALIGN_UNIT_SIZE)) + (max_logical_sector_address % sectors_no_per_page == 0 ? 0 : 1);
 #else
 		Total_logical_pages_no = (max_logical_sector_address / sectors_no_per_page) + (max_logical_sector_address % sectors_no_per_page == 0 ? 0 : 1);
 #endif
@@ -211,7 +210,7 @@ namespace SSD_Components
 			Plane_ids[pid] = plane_ids[pid];
 		}
 
-		std::cout << "[flag1]Total_logical_pages_no: " << Total_logical_pages_no << std::endl;
+		std::cout << "[flag1]Total_logical_pages_no *ALIGN_UNIT_SIZE: " << Total_logical_pages_no*ALIGN_UNIT_SIZE << std::endl;
 		GlobalMappingTable = new GMTEntryType[Total_logical_pages_no*ALIGN_UNIT_SIZE];
 		for (unsigned int i = 0; i < Total_logical_pages_no* ALIGN_UNIT_SIZE; i++) {
 			GlobalMappingTable[i].PPA = NO_PPA;
@@ -817,7 +816,6 @@ namespace SSD_Components
 
 		//First: distribute LPAs to planes
 		NVM::FlashMemory::Physical_Page_Address plane_address;
-		int cnt = 0;
 		for (auto lpa = lpa_list.begin(); lpa != lpa_list.end();) {
 			if ((*lpa).first >= domains[stream_id]->Total_logical_pages_no) {
 				PRINT_ERROR("Out of range LPA specified for preconditioning! LPA shoud be smaller than " << domains[stream_id]->Total_logical_pages_no << ", but it is " << (*lpa).first)
@@ -912,7 +910,6 @@ namespace SSD_Components
 							}
 						}
 #endif
-
 #if PATCH_PRECOND
 						//Check if it is possible to find a PPA for each LPA with current proability assignments 
 						unsigned int total_valid_pages = 0;
@@ -1131,11 +1128,7 @@ namespace SSD_Components
 				// global GC stripping
 				allocate_plane_for_user_write(transaction, true);
 				(gc_Alloc_count[transaction->Stream_id])++;
-#if PATCH_PRECOND
-				if (transaction->LPA == 106885) {
-					//std::cout << "[DEBUG PRECOND] GC gonna allocate new page for LPA: " << transaction->LPA << std::endl;
-				}
-#endif
+
 				allocate_page_in_plane_for_user_write(transaction, true);
 				bypass_count++;
 			}
@@ -1189,21 +1182,9 @@ namespace SSD_Components
 
 	void Address_Mapping_Unit_Page_Level::allocate_plane_for_preconditioning(stream_id_type stream_id, LPA_type lpn, NVM::FlashMemory::Physical_Page_Address& targetAddress)
 	{
-#if PATCH_PRECOND
 		AddressMappingDomain* domain = domains[stream_id];
-#else
-		AddressMappingDomain* domain = domains[stream_id];
-#endif
 		//// Dynamic Plane Allocation.
-#if PATCH_PRECOND
 		lpn = (user_Alloc_count[stream_id])++;
-#else
-		lpn = (user_Alloc_count[stream_id])++;
-#endif
-		//lpn = (user_Alloc_count[stream_id])++;
-		//lpn = user_Alloc_count[transaction->Stream_id];
-
-
 
 		switch (domain->PlaneAllocationScheme) {
 			case Flash_Plane_Allocation_Scheme_Type::CWDP:
@@ -1538,13 +1519,8 @@ namespace SSD_Components
 	{
 		AddressMappingDomain* domain = domains[transaction->Stream_id];
 		PPA_type old_ppa = domain->Get_ppa(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
-		NVM::FlashMemory::Physical_Page_Address addr_debug; bool is_for_USER= false;
+		NVM::FlashMemory::Physical_Page_Address addr_debug; bool is_for_USER = false;
 
-#if PATCH_PRECOND
-		if (transaction->LPA == 106885) {
-			//std::cout << "[DEBUG PRECOND] LPA: " << transaction->LPA << " is accessed by (is_for_gc): "<<is_for_gc << std::endl;
-		}
-#endif
 		//step1. invalidate previous (old) page and assign update read (if NAND Page size is not same to mapping granularity)
 		if (old_ppa == NO_PPA)  /*this is the first access to the logical page*/
 		{
@@ -1564,7 +1540,7 @@ namespace SSD_Components
 				addr_debug = addr;
 #endif
 				//std::cout << "[GC DEBUG] invalidate blk.pg.subpg: " << addr.ChannelID << ", " << addr.ChipID << ", " << addr.DieID << ", " << addr.PlaneID << ", " << addr.BlockID << ", pg" << addr.PageID << ", " << addr.subPageID <<  std::endl;
-
+			
 				block_manager->Invalidate_subpage_in_block(transaction->Stream_id, addr);
 
 				page_status_type page_status_in_cmt = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
@@ -1572,14 +1548,13 @@ namespace SSD_Components
 					PRINT_ERROR("Unexpected mapping table status in allocate_page_in_plane_for_user_write for a GC/WL write!")
 			} else {
 				page_status_type prev_page_status = domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA);
-				//printf("prev_page_status: 0x%lx, tr->write_sectors_bitmap: 0x%lx\n", prev_page_status, transaction->write_sectors_bitmap); //flag0309 0x01 and 0xff
+				//printf("prev_page_status: %lx, tr->write_sectors_bitmap: %lx\n", prev_page_status, transaction->write_sectors_bitmap);
 				page_status_type status_intersection = transaction->write_sectors_bitmap & prev_page_status;
 				//check if an update read is required
-				//printf("status_intersection: 0x%lx\n", status_intersection);
 				if (status_intersection == prev_page_status) {
-					//std::cout << "."<<std::endl;
 					NVM::FlashMemory::Physical_Page_Address addr;
 					Convert_ppa_to_address(old_ppa, addr);
+
 #if PATCH_PRECOND
 					addr_debug = addr;
 					is_for_USER = true;
@@ -1591,25 +1566,19 @@ namespace SSD_Components
 						std::cout << "transaction->Stream_id != 0 (allocate_page_in_plane_for_user_write flag2)" << std::endl;
 						exit(1);
 					}
-#if PATCH_PRECOND
-					Block_Pool_Slot_Type* block_tmp = &(block_manager->plane_manager[2][0][0][2].Blocks[0]);
-					if ((addr.ChannelID == 2 && addr.ChipID == 0 && addr.DieID == 0 && addr.PlaneID == 2) && (block_tmp->Stream_id == 255)) {
-						//std::cout << "[DEBUG PRECOND] weird (Stream_id=255) LPA: " << transaction->LPA<<", is_for_gc: "<<is_for_gc << std::endl;
-					}
-#endif
-#if PATCH_PRECOND
-					if ((addr.ChannelID == 2 && addr.ChipID == 0 && addr.DieID == 0 && addr.PlaneID == 2) && addr.BlockID == 0 && addr.PageID == 0 && addr.subPageID == 0) {
-						//std::cout << "[DEBUG PRECOND] Strange LPA: " << transaction->LPA << "with ppa: "<< old_ppa<<" invalidate 2002000 subpage" << std::endl;
-					}
-#endif
 					block_manager->Invalidate_subpage_in_block(transaction->Stream_id, addr);
 
 				} else {
 					page_status_type read_pages_bitmap = status_intersection ^ prev_page_status;
-					//std::cout << "[DEBUG PRECOND] count_sector_no_from_status_bitmap(read_pages_bitmap): " << count_sector_no_from_status_bitmap(read_pages_bitmap) << std::endl;
+
 					Stats::Additional_WAF_by_mapping += count_sector_no_from_status_bitmap(read_pages_bitmap);
 					Total_RMW_SEC = Stats::Additional_WAF_by_mapping;
+					
 
+
+					if (transaction->Address.ChannelID == 3 && transaction->Address.ChipID == 0 && transaction->Address.DieID == 0 && transaction->Address.PlaneID == 1 && transaction->Address.BlockID == 255 && transaction->Address.PageID == 0 && transaction->Address.subPageID == 1) {
+						std::cout << "USER invalidate 3 0 0 1 255 0 1" << std::endl;
+					}
 
 					NVM_Transaction_Flash_RD *update_read_tr = new NVM_Transaction_Flash_RD(transaction->Source, transaction->Stream_id,
 						count_sector_no_from_status_bitmap(read_pages_bitmap) * SECTOR_SIZE_IN_BYTE, transaction->LPA, old_ppa, transaction->UserIORequest,
@@ -1620,45 +1589,12 @@ namespace SSD_Components
 						std::cout << "transaction->Stream_id != 0 (allocate_page_in_plane_for_user_write flag3)" << std::endl;
 						exit(1);
 					}
-
 					block_manager->Invalidate_subpage_in_block(transaction->Stream_id, update_read_tr->Address);
 
 					transaction->RelatedRead = update_read_tr;
-
 				}
 			}
 		}
-
-#if PATCH_PRECOND
-		/*
-		NVM::FlashMemory::Physical_Page_Address addr_tmp;
-		std::cout << "(0) old_ppa: " << old_ppa << std::endl;
-		Convert_ppa_to_address(old_ppa, addr_tmp);
-		std::cout << "(1) ppa->addr: " << addr_tmp.ChannelID << addr_tmp.ChipID << addr_tmp.DieID << addr_tmp.PlaneID << " Block: " << addr_tmp.BlockID << " Page: " << addr_tmp.PageID << " sub: " << addr_tmp.subPageID << std::endl;
-		PPA_type ppa = Convert_address_to_ppa(addr_tmp);
-		std::cout << "(1) addr->ppa: " << ppa << std::endl;
-		Convert_ppa_to_address(ppa, addr_tmp);
-		std::cout << "(2) ppa->addr: " << addr_tmp.ChannelID << addr_tmp.ChipID << addr_tmp.DieID << addr_tmp.PlaneID << " Block: " << addr_tmp.BlockID << " Page: " << addr_tmp.PageID << " sub: " << addr_tmp.subPageID << std::endl;
-		ppa = Convert_address_to_ppa(addr_tmp);
-		std::cout << "(2) addr->ppa: " << ppa << std::endl;
-*/
-#else
-#endif
-
-
-
-#if PATCH_PRECOND
-		//if (transaction->LPA == 18608096 || transaction->LPA == 16074761 || transaction->LPA == 49683048 || transaction->LPA == 3094385) {
-		if(transaction->LPA == 106885){
-			if (old_ppa == NO_PPA) {
-					//std::cout << "[DEBUG PRECOND] (First access) tr->LPA: " << transaction->LPA << ", and will assign ppa " << std::endl;
-				}
-				else {
-					//std::cout << "[DEBUG PRECOND] (Second access) invalidated: " << addr_debug.ChannelID << addr_debug.ChipID << addr_debug.DieID << addr_debug.PlaneID << " Block: " << addr_debug.BlockID << " Page: " << addr_debug.PageID << " sub: " << addr_debug.subPageID << std::endl;
-					//std::cout << "[DEBUG PRECOND] tr->LPA: " << transaction->LPA << ", old_ppa: " << old_ppa << std::endl;
-				}
-		}
-#endif
 
 		//step 2. assign new page to write data + update mapping info
 		/*The following lines should not be ordered with respect to the block_manager->Invalidate_page_in_block
@@ -1671,17 +1607,6 @@ namespace SSD_Components
 		}
 		transaction->PPA = Convert_address_to_ppa(transaction->Address);
 
-#if PATCH_PRECOND
-		Block_Pool_Slot_Type* block = &(block_manager->plane_manager[transaction->Address.ChannelID][transaction->Address.ChipID][transaction->Address.DieID][transaction->Address.PlaneID].Blocks[transaction->Address.BlockID]);
-		//					if ((transaction->Address.ChannelID == 3) && (transaction->Address.ChipID == 0) && (transaction->Address.DieID == 0) && (transaction->Address.PlaneID == 2) && (transaction->Address.BlockID == 0) && (transaction->Address.PageID == 0) && (transaction->Address.subPageID == 0) && (block->Stream_id==255) ) {
-		//if (transaction->LPA == 18608096 || transaction->LPA == 16074761 || transaction->LPA == 49683048 || transaction->LPA == 3094385) {
-		if (transaction->LPA == 106885) {
-			//std::cout << "[DEBUG PRECOND] plane_manager->block->Stream_id: " << block->Stream_id << std::endl;
-			//std::cout << "[DEBUG PRECOND] new address: " << transaction->Address.ChannelID << transaction->Address.ChipID << transaction->Address.DieID << transaction->Address.PlaneID <<", block: "<< transaction->Address.BlockID <<", "<< transaction->Address.PageID <<", "<< transaction->Address.subPageID << std::endl;
-			//std::cout << "[DEBUG PRECOND] update CMT: tr->LPA: "<< transaction->LPA <<", PPA: "<< transaction->PPA << ", tr->Stream_id: "<<transaction->Stream_id<< std::endl;
-			//std::cout << std::endl;
-		}
-#endif
 
 		domain->Update_mapping_info(ideal_mapping_table, transaction->Stream_id, transaction->LPA, transaction->PPA,
 			((NVM_Transaction_Flash_WR*)transaction)->write_sectors_bitmap | domain->Get_page_status(ideal_mapping_table, transaction->Stream_id, transaction->LPA));

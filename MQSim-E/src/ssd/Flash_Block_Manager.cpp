@@ -203,12 +203,12 @@ namespace SSD_Components
 			plane_record->Check_bookkeeping_correctness(page_addresses[i]);
 #if PATCH_PRECOND
 			Block_Pool_Slot_Type* block = &(plane_record->Blocks[page_addresses[i].BlockID]);
-			if (page_addresses[i].ChannelID == 2 && page_addresses[i].ChipID == 0 && page_addresses[i].DieID == 0 && page_addresses[i].PlaneID == 2 && page_addresses[i].BlockID == 0) {
+			//if (page_addresses[i].ChannelID == 2 && page_addresses[i].ChipID == 0 && page_addresses[i].DieID == 0 && page_addresses[i].PlaneID == 2 && page_addresses[i].BlockID == 0) {
 				//std::cout << "[DEBUG PRECOND] validate 20020 block and pageid: " << page_addresses[i].PageID << ", " << page_addresses[i].subPageID << std::endl;
-				if (Is_Subpage_valid(block, page_addresses[i].PageID, page_addresses[i].subPageID)) {
+				//if (Is_Subpage_valid(block, page_addresses[i].PageID, page_addresses[i].subPageID)) {
 					//std::cout << "[DEBUG PRECOND] validated well" << std::endl;
-				}
-			}
+				//}
+			//}
 #endif
 		}
 #else
@@ -224,6 +224,7 @@ namespace SSD_Components
 
 
 		//Invalidate the remaining pages in the block
+
 #if PATCH_PRECOND
 		NVM::FlashMemory::Physical_Page_Address target_address(plane_address);
 		while (plane_record->Data_wf[stream_id]->Current_page_write_index < pages_no_per_block) {
@@ -246,11 +247,11 @@ namespace SSD_Components
 
 #if PATCH_PRECOND
 				Block_Pool_Slot_Type* block = &(plane_record->Blocks[target_address.BlockID]);
-				if (target_address.ChannelID == 2 && target_address.ChipID == 0 && target_address.DieID == 0 && target_address.PlaneID == 2 && target_address.BlockID == 0) {
-					if (!Is_Subpage_valid(block, target_address.PageID, target_address.subPageID)) {
+				//if (target_address.ChannelID == 2 && target_address.ChipID == 0 && target_address.DieID == 0 && target_address.PlaneID == 2 && target_address.BlockID == 0) {
+					//if (!Is_Subpage_valid(block, target_address.PageID, target_address.subPageID)) {
 						//std::cout << "[DEBUG PRECOND] Invalidated well" << std::endl;
-					}
-				}
+					//}
+				//}
 #endif
 
 				plane_record->Check_bookkeeping_correctness(plane_address);
@@ -258,12 +259,12 @@ namespace SSD_Components
 				//std::cout << "[DEBUG PRECOND] Invalid/valid/free pages: " << plane_record->Invalid_pages_count << ", " << plane_record->Valid_pages_count << ", " << plane_record->Free_pages_count << std::endl;
 				//std::cout << "[DEBUG PRECOND] Invalid/valid/free subpages: " << plane_record->Invalid_subpages_count << ", " << plane_record->Valid_subpages_count << ", " << plane_record->Free_subpages_count << std::endl;
 #if PATCH_PRECOND
-				if (target_address.ChannelID == 2 && target_address.ChipID == 0 && target_address.DieID == 0 && target_address.PlaneID == 2 && target_address.BlockID == 0) {
+				//if (target_address.ChannelID == 2 && target_address.ChipID == 0 && target_address.DieID == 0 && target_address.PlaneID == 2 && target_address.BlockID == 0) {
 					//std::cout << "[DEBUG PRECOND] invalidated 20020 block and pageid: " << target_address.PageID << ", " << target_address.subPageID << std::endl;
-				}
+				//}
 #endif
 			}
-		}
+			}
 #else
 		NVM::FlashMemory::Physical_Page_Address target_address(plane_address);
 		while (plane_record->Data_wf[stream_id]->Current_page_write_index < pages_no_per_block) {
@@ -274,6 +275,7 @@ namespace SSD_Components
 			plane_record->Check_bookkeeping_correctness(plane_address);
 		}
 #endif
+
 
 		//Update the write frontier
 		plane_record->Data_wf[stream_id] = plane_record->Get_a_free_block(stream_id, false);
@@ -311,23 +313,17 @@ namespace SSD_Components
 		plane_record->Check_bookkeeping_correctness(page_address);
 	}
 
-
-
 	inline void Flash_Block_Manager::Invalidate_subpage_in_block(const stream_id_type stream_id, const NVM::FlashMemory::Physical_Page_Address& page_address)
 	{
 		PlaneBookKeepingType* plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
 		plane_record->Invalid_subpages_count++;
 		plane_record->Valid_subpages_count--;
-		
+
 		if (plane_record->Blocks[page_address.BlockID].Stream_id != stream_id) {
 			PRINT_MESSAGE("Page Info " << page_address.ChannelID << " " << page_address.ChipID << " " << page_address.DieID << " " << page_address.PlaneID << " " << page_address.BlockID << " " << page_address.PageID << ", subPg: "<<page_address.subPageID<< " Stream: " << plane_record->Blocks[page_address.BlockID].Stream_id);
 			PRINT_ERROR("Inconsistent status in the Invalidate_subpage_in_block function! The accessed block is not allocated to stream " << stream_id)
 		}
-#if PATCH_PRECOND
-		if (page_address.ChannelID == 2 && page_address.ChipID == 0 && page_address.DieID == 0 && page_address.PlaneID == 2 && page_address.BlockID == 0 && page_address.PageID == 0 && page_address.subPageID == 0) {
-			//std::cout << "[DEBUG PRECOND] 2002 000 invalidated" << std::endl;
-		}
-#endif
+
 		plane_record->Blocks[page_address.BlockID].Invalid_subpage_count++;
 		plane_record->Blocks[page_address.BlockID].Invalid_Subpage_bitmap[(page_address.PageID*ALIGN_UNIT_SIZE + page_address.subPageID) / 64] |= ((uint64_t)0x1) << (((page_address.PageID * ALIGN_UNIT_SIZE) + page_address.subPageID) % 64);
 
@@ -355,7 +351,6 @@ namespace SSD_Components
 		}
 		plane_record->Blocks[page_address.BlockID].Invalid_page_count++;
 		plane_record->Blocks[page_address.BlockID].Invalid_page_bitmap[page_address.PageID / 64] |= ((uint64_t)0x1) << (page_address.PageID % 64);
-
 	}
 
 	inline void Flash_Block_Manager::Invalidate_subpage_in_block_for_preconditioning(const stream_id_type stream_id, const NVM::FlashMemory::Physical_Page_Address& page_address)
@@ -367,7 +362,7 @@ namespace SSD_Components
 		}
 		plane_record->Blocks[page_address.BlockID].Invalid_subpage_count++;
 		plane_record->Blocks[page_address.BlockID].Invalid_Subpage_bitmap[(page_address.PageID * ALIGN_UNIT_SIZE + page_address.subPageID) / 64] |= ((uint64_t)0x1) << (((page_address.PageID * ALIGN_UNIT_SIZE) + page_address.subPageID) % 64);
-
+	
 	
 	}
 
@@ -380,7 +375,6 @@ namespace SSD_Components
 		plane_record->Invalid_subpages_count -= block->Invalid_subpage_count;
 
 		Stats::Block_erase_histogram[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID][block->Erase_count]--;
-
 		block->Erase();
 		Stats::Block_erase_histogram[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID][block->Erase_count]++;
 		plane_record->Add_to_free_block_pool(block, gc_and_wl_unit->Use_dynamic_wearleveling());
