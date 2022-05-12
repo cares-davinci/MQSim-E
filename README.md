@@ -1,8 +1,8 @@
 # MQSim-E: A Simulator for Enterprise SSD
 thesis: MQSim-E: An Enterprise SSD Simulator (CAL'22)
 
-We tested on only Windows.
-contact: dslee@davinci.snu.ac.kr
+We tested on only Windows with visual studio project.
+Contact: dslee@davinci.snu.ac.kr
 
 
 ## Usage in Windows
