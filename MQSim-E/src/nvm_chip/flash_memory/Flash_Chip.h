@@ -117,6 +117,7 @@ namespace NVM
 			sim_time_type GetSuspendProgramTime();
 			sim_time_type GetSuspendEraseTime();
 			void Report_results_in_XML(std::string name_prefix, Utils::XmlWriter& xmlwriter);
+			void Set_metadata(flash_die_ID_type die_id, flash_plane_ID_type plane_id, flash_block_ID_type block_id, flash_page_ID_type page_id, flash_page_ID_type subpage_id, LPA_type lpa); //JY_Modified
 			LPA_type Get_metadata(flash_die_ID_type die_id, flash_plane_ID_type plane_id, flash_block_ID_type block_id, flash_page_ID_type page_id);//A simplification to decrease the complexity of GC execution! The GC unit may need to know the metadata of a page to decide if a page is valid or invalid. 
 		private:
 			Flash_Technology_Type flash_technology;
@@ -126,7 +127,7 @@ namespace NVM
 			unsigned int die_no;
 			unsigned int plane_no_in_die;                  //indicate how many planes in a die
 			unsigned int block_no_in_plane;                //indicate how many blocks in a plane
-			unsigned int page_no_per_block;                 //indicate how many pages in a block
+			unsigned int page_no_per_block;                 //indicate how many pages in a block 
 			sim_time_type *_readLatency, *_programLatency, _eraseLatency;
 			sim_time_type _suspendProgramLatency, _suspendEraseLatency;
 			sim_time_type _RBSignalDelayRead, _RBSignalDelayWrite, _RBSignalDelayErase;

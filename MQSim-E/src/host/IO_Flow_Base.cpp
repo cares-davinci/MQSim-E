@@ -109,6 +109,9 @@ namespace Host_Components
 			default:
 				break;
 		}
+
+//js
+		trace_start_time = 0;
 	}
 	
 	IO_Flow_Base::~IO_Flow_Base()
@@ -295,9 +298,8 @@ namespace Host_Components
 			}
 			STAT_transferred_bytes_read += request->LBA_count * SECTOR_SIZE_IN_BYTE;
 
-
 #if LOG_USER_READ
-			read_log_file << (Simulator->Time() / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << (request_delay / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << request->LBA_count << " " << request->Start_LBA << " " << request->Arrival_time << " " << request->Enqueue_time << std::endl;
+			read_log_file << flow_id << " " << (Simulator->Time() / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << (request_delay / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << request->LBA_count << " " << request->Start_LBA << " " << request->Arrival_time << " " << request->Enqueue_time << std::endl;
 #endif
 		} else {
 			STAT_serviced_write_request_count++;
@@ -317,7 +319,7 @@ namespace Host_Components
 			}
 			STAT_transferred_bytes_write += request->LBA_count * SECTOR_SIZE_IN_BYTE;
 #if LOG_USER_WRITE
-			write_log_file << (Simulator->Time() / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << (request_delay / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << request->LBA_count << " " << request->Start_LBA << " " << request->Arrival_time << " " << request->Enqueue_time << std::endl;
+			write_log_file << flow_id << " " << (Simulator->Time() / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << (request_delay / SIM_TIME_TO_MICROSECONDS_COEFF) << "  " << request->LBA_count << " " << request->Start_LBA << " " << request->Arrival_time << " " << request->Enqueue_time << std::endl;
 #endif
 		}
 
@@ -495,6 +497,68 @@ namespace Host_Components
 		return (uint32_t)(STAT_max_device_response_time / SIM_TIME_TO_MICROSECONDS_COEFF);
 	}
 
+	// js
+	uint32_t IO_Flow_Base::Get_read_device_response_time()//in microseconds
+	{
+		if (STAT_serviced_request_count == 0) {
+			return 0;
+		}
+
+		return (uint32_t)((double)STAT_sum_device_response_time_read / STAT_serviced_read_request_count / SIM_TIME_TO_MICROSECONDS_COEFF);
+	}
+
+	// js
+	uint32_t IO_Flow_Base::Get_max_read_response_time()//in microseconds
+	{
+		return (uint32_t)(STAT_max_device_response_time_read / SIM_TIME_TO_MICROSECONDS_COEFF);
+	}
+
+	// js
+	uint32_t IO_Flow_Base::Get_write_device_response_time()//in microseconds
+	{
+		if (STAT_serviced_request_count == 0) {
+			return 0;
+		}
+
+		return (uint32_t)((double)STAT_sum_device_response_time_write / STAT_serviced_write_request_count / SIM_TIME_TO_MICROSECONDS_COEFF);
+	}
+
+	// js
+	uint32_t IO_Flow_Base::Get_max_write_response_time()//in microseconds
+	{
+		return (uint32_t)(STAT_max_device_response_time_write / SIM_TIME_TO_MICROSECONDS_COEFF);
+	}
+
+	// js
+	uint32_t IO_Flow_Base::Get_IOPS()//in microseconds
+	{
+		return (uint32_t)((double)STAT_generated_request_count / ((Simulator->Time() - trace_start_time)/ SIM_TIME_TO_SECONDS_COEFF));
+	}
+
+// js
+	uint32_t IO_Flow_Base::Get_read_ratio()//in microseconds
+	{
+		return (uint32_t)(( (double)STAT_serviced_read_request_count / (double)STAT_serviced_request_count)*100);
+	}
+
+	// js
+	uint32_t IO_Flow_Base::Get_Bandwidth()//in microseconds
+	{
+		return (uint32_t)( (double)STAT_transferred_bytes_total / ((Simulator->Time()- trace_start_time) / SIM_TIME_TO_SECONDS_COEFF) );
+	}
+
+// js
+	uint32_t IO_Flow_Base::Get_Read_Bandwidth()//in microseconds
+	{
+		return (uint32_t)( (double)STAT_transferred_bytes_read / ((Simulator->Time() - trace_start_time)/ SIM_TIME_TO_SECONDS_COEFF));
+	}
+
+// js
+	uint32_t IO_Flow_Base::Get_Write_Bandwidth()//in microseconds
+	{
+		return (uint32_t)( (double)STAT_transferred_bytes_write / ((Simulator->Time() - trace_start_time)/ SIM_TIME_TO_SECONDS_COEFF));
+	}
+
 	uint32_t IO_Flow_Base::Get_end_to_end_request_delay()
 	{
 		if (STAT_serviced_request_count == 0) {
@@ -555,15 +619,15 @@ namespace Host_Components
 		xmlwriter.Write_attribute_string(attr, val);
 
 		attr = "IOPS";
-		val = std::to_string((double)STAT_generated_request_count / (Simulator->Time() / SIM_TIME_TO_SECONDS_COEFF));
+		val = std::to_string((double)STAT_generated_request_count / ((Simulator->Time() - trace_start_time) / SIM_TIME_TO_SECONDS_COEFF));
 		xmlwriter.Write_attribute_string(attr, val);
 
 		attr = "IOPS_Read";
-		val = std::to_string((double)STAT_generated_read_request_count / (Simulator->Time() / SIM_TIME_TO_SECONDS_COEFF));
+		val = std::to_string((double)STAT_generated_read_request_count / ((Simulator->Time() - trace_start_time) / SIM_TIME_TO_SECONDS_COEFF));
 		xmlwriter.Write_attribute_string(attr, val);
 
 		attr = "IOPS_Write";
-		val = std::to_string((double)STAT_generated_write_request_count / (Simulator->Time() / SIM_TIME_TO_SECONDS_COEFF));
+		val = std::to_string((double)STAT_generated_write_request_count / ((Simulator->Time() - trace_start_time) / SIM_TIME_TO_SECONDS_COEFF));
 		xmlwriter.Write_attribute_string(attr, val);
 
 #if ANLZ_AFTER_PRECOND
@@ -591,15 +655,15 @@ namespace Host_Components
 		xmlwriter.Write_attribute_string(attr, val);
 
 		attr = "Bandwidth";
-		val = std::to_string((double)STAT_transferred_bytes_total / (Simulator->Time() / SIM_TIME_TO_SECONDS_COEFF));
+		val = std::to_string((double)STAT_transferred_bytes_total / ((Simulator->Time()- trace_start_time) / SIM_TIME_TO_SECONDS_COEFF));
 		xmlwriter.Write_attribute_string(attr, val);
 
 		attr = "Bandwidth_Read";
-		val = std::to_string((double)STAT_transferred_bytes_read / (Simulator->Time() / SIM_TIME_TO_SECONDS_COEFF));
+		val = std::to_string((double)STAT_transferred_bytes_read / ((Simulator->Time() - trace_start_time)/ SIM_TIME_TO_SECONDS_COEFF));
 		xmlwriter.Write_attribute_string(attr, val);
 
 		attr = "Bandwidth_Write";
-		val = std::to_string((double)STAT_transferred_bytes_write / (Simulator->Time() / SIM_TIME_TO_SECONDS_COEFF));
+		val = std::to_string((double)STAT_transferred_bytes_write / ((Simulator->Time() - trace_start_time)/ SIM_TIME_TO_SECONDS_COEFF));
 		xmlwriter.Write_attribute_string(attr, val);
 
 

@@ -45,9 +45,6 @@ namespace NVM
 			void Read_metadata(SubPageMetadata& metadata)
 			{
 				metadata.LPA = this->Metadata.LPA;
-				if (this->Metadata.LPA == 283963) {
-					////std::cout << "[DEBUG GC-Read_metadata()] read LPA = 283963 from chip "<< std::endl;
-				}
 			}
 		};
 	}

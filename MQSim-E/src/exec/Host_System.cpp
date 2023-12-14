@@ -129,6 +129,9 @@ void Host_System::Start_simulation()
 			break;
 	}
 
+	// js debug
+	std::vector<Utils::Workload_Statistics*> workload_stats = get_workloads_statistics();
+
 	if (preconditioning_required) {
 		std::vector<Utils::Workload_Statistics*> workload_stats = get_workloads_statistics();
 		ssd_device->Perform_preconditioning(workload_stats);

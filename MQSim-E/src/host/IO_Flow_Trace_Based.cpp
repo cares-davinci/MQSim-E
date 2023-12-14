@@ -47,11 +47,21 @@ namespace Host_Components
 
 		char* pEnd;
 		request->LBA_count = std::strtoul(current_trace_line[ASCIITraceSizeColumn].c_str(), &pEnd, 0);
-		if (need_to_divide == true){
-			request->LBA_count /= 512;
-		} 
-		
+#ifdef MSR_TRACE
+		request->LBA_count /= 512;
+#endif
+#ifdef ALIBABA
+		request->LBA_count /= 512;
+#endif
+
 		request->Start_LBA = std::strtoull(current_trace_line[ASCIITraceAddressColumn].c_str(), &pEnd, 0);
+#ifdef MSR_TRACE
+		request->Start_LBA /= 512;
+#endif
+#ifdef ALIBABA
+		request->Start_LBA /= 512;
+#endif
+
 		if (request->Start_LBA <= (end_lsa_on_device - start_lsa_on_device)) {
 			request->Start_LBA += start_lsa_on_device;
 		} else {
@@ -150,14 +160,31 @@ namespace Host_Components
 				PRINT_ERROR("Need to use propoer definition for trace");				
 				break;
 			}
+
 			total_requests_in_file++;
-#ifndef OLD_TRACE
+#if defined(ALIBABA)
 			sim_time_type prev_time = last_request_arrival_time;
-			last_request_arrival_time = std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10);
+			last_request_arrival_time = std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10) *1000 / Trace_ACC;
+
 			if (last_request_arrival_time < prev_time) {
 				PRINT_ERROR("Unexpected request arrival time: " << last_request_arrival_time << "\nMQSim expects request arrival times to be monotonically increasing in the input trace!")
 			}
-#endif			
+#elif defined(MSR_TRACE)
+			sim_time_type prev_time = last_request_arrival_time;
+			last_request_arrival_time = std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10);
+			last_request_arrival_time = last_request_arrival_time * 100 / Trace_ACC; // js : convert window file time (100ns) to 1ns and accelerate to Trace_ACC
+			if (last_request_arrival_time < prev_time)
+			{
+				PRINT_ERROR("Unexpected request arrival time: " << last_request_arrival_time << "\nMQSim expects request arrival times to be monotonically increasing in the input trace!")
+			}
+#elif defined(OLD_TRACE)
+			sim_time_type prev_time = last_request_arrival_time;
+			last_request_arrival_time = std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10);
+
+			if (last_request_arrival_time < prev_time) {
+				PRINT_ERROR("Unexpected request arrival time: " << last_request_arrival_time << "\nMQSim expects request arrival times to be monotonically increasing in the input trace!")
+			}
+#endif
 		}
 
 		trace_file.close();
@@ -166,7 +193,7 @@ namespace Host_Components
 		if (total_replay_no == 1) {
 			total_requests_to_be_generated = (int)(((double)percentage_to_be_simulated / 100) * total_requests_in_file);
 		}
-		else {
+		else{
 			total_requests_to_be_generated = total_requests_in_file * total_replay_no;
 		}
 
@@ -176,8 +203,17 @@ namespace Host_Components
 		Utils::Helper_Functions::Remove_cr(trace_line);
 		Utils::Helper_Functions::Tokenize(trace_line, ASCIILineDelimiter, current_trace_line);
 
-#if IGNORE_TIME_STAMP		
+#if IGNORE_TIME_STAMP				
 		Simulator->Register_sim_event((sim_time_type)1, this);
+#elif defined(ALIBABA)
+		trace_start_time = (std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10)) * 1000 / Trace_ACC;
+		std::cout << "trace start at " << trace_start_time << std::endl;
+		Simulator->Register_sim_event((sim_time_type)trace_start_time, this);
+#elif defined(MSR_TRACE)
+		//trace_start_time = trace_start_time * 100 / Trace_ACC;// js : convert window file time (100ns) to 1ns => * 100, acc */10
+		trace_start_time = (std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10)) * 100 / Trace_ACC;
+		std::cout << "trace start at " << trace_start_time << std::endl;
+		Simulator->Register_sim_event((sim_time_type)trace_start_time, this);
 #else
 		Simulator->Register_sim_event(std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10), this);
 #endif
@@ -189,12 +225,19 @@ namespace Host_Components
 
 	void IO_Flow_Trace_Based::Execute_simulator_event(MQSimEngine::Sim_Event*)
 	{
+
+#if IGNORE_TIME_STAMP			
+		for (unsigned int i = 0; i < ENQUEUED_REQUEST_NUMBER; i++) {
+			Submit_io_request(Generate_next_request());
+		}
+#else
 		Host_IO_Request* request = Generate_next_request();
 		if (request != NULL) {
 			Submit_io_request(request);
 		}
 
 		if (STAT_generated_request_count < total_requests_to_be_generated) {
+			
 			std::string trace_line;
 			if (std::getline(trace_file, trace_line)) {
 				Utils::Helper_Functions::Remove_cr(trace_line);
@@ -212,15 +255,30 @@ namespace Host_Components
 				Utils::Helper_Functions::Tokenize(trace_line, ASCIILineDelimiter, current_trace_line);
 				PRINT_MESSAGE("* Replay round "<< replay_counter << "of "<< total_replay_no << " started  for" << ID())
 			}
+			
+#if defined(ALIBABA)
 			char* pEnd;
-#if IGNORE_TIME_STAMP			
-			for (unsigned int i = 0; i < ENQUEUED_REQUEST_NUMBER; i++) {
-				Submit_io_request(Generate_next_request());
+			sim_time_type temp = std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10);
+			temp = (sim_time_type)(temp * 1000 / Trace_ACC);
+			if (replay_counter > 0) {
+				temp = temp + time_offset;
 			}
+			Simulator->Register_sim_event(temp, this);
+#elif defined(MSR_TRACE)
+			char* pEnd;
+			sim_time_type temp = std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10);
+			//temp = (sim_time_type)(temp * 100 / Trace_ACC) - trace_start_time + 1;
+			temp = (sim_time_type)(temp * 100 / Trace_ACC);
+			if (replay_counter > 0) {
+				temp = temp + time_offset;
+			}
+			Simulator->Register_sim_event(temp, this);
 #else
+			char* pEnd;
 			Simulator->Register_sim_event(time_offset + std::strtoll(current_trace_line[ASCIITraceTimeColumn].c_str(), &pEnd, 10), this);
 #endif
 		}
+#endif
 	}
 
 	void IO_Flow_Trace_Based::Get_statistics(Utils::Workload_Statistics& stats, LPA_type(*Convert_host_logical_address_to_device_address)(LHA_type lha),
@@ -273,6 +331,12 @@ namespace Host_Components
 	
 			sim_time_type prev_time = last_request_arrival_time;
 			last_request_arrival_time = std::strtoull(line_splitted[ASCIITraceTimeColumn].c_str(), &pEnd, 10);
+#ifdef ALIBABA
+			last_request_arrival_time = last_request_arrival_time * 1000 / Trace_ACC; 
+#endif
+#ifdef MSR_TRACE
+			last_request_arrival_time = last_request_arrival_time * 100 / Trace_ACC; // js : convert window file time (100ns) to 1ns
+#endif
 			if (last_request_arrival_time < prev_time) {
 				PRINT_ERROR("Unexpected request arrival time: " << last_request_arrival_time << "\nMQSim expects request arrival times to be monotonic increasing in the input trace!")
 			}
@@ -280,12 +344,20 @@ namespace Host_Components
 			sum_inter_arrival += last_request_arrival_time - prev_time;
 
 			unsigned int LBA_count = std::strtoul(line_splitted[ASCIITraceSizeColumn].c_str(), &pEnd, 0);
-			if (need_to_divide == true){
-				LBA_count /= 512;
-			}
-
+#ifdef MSR_TRACE
+			LBA_count /= 512; // js: convert size
+#endif
+#ifdef ALIBABA
+			LBA_count /= 512; // js: convert size
+#endif
 			sum_request_size += LBA_count;
 			LHA_type start_LBA = std::strtoull(line_splitted[ASCIITraceAddressColumn].c_str(), &pEnd, 0);
+#ifdef MSR_TRACE
+			start_LBA /= 512; // js: convert size
+#endif
+#ifdef ALIBABA
+			start_LBA /= 512; // js: convert size
+#endif
 			if (start_LBA <= (end_lsa_on_device - start_lsa_on_device)) {
 				start_LBA += start_lsa_on_device;
 			} else {
@@ -405,6 +477,12 @@ namespace Host_Components
 		trace_file_temp.close();
 		stats.Average_request_size_sector = (unsigned int)(sum_request_size / stats.Total_generated_reqeusts);
 		stats.Average_inter_arrival_time_nano_sec = sum_inter_arrival / stats.Total_generated_reqeusts;
+
+		// js debug
+		std::cout << "trace end at " << last_request_arrival_time << std::endl;
+		std::cout<<"avg interval (us) " <<stats.Average_inter_arrival_time_nano_sec/1000<<std::endl;
+		int sec_win = (last_request_arrival_time-trace_start_time) / 1000000000 + 1;
+		std::cout<<"IOPS " <<stats.Total_generated_reqeusts/(double)sec_win<<std::endl;
 
 		stats.Initial_occupancy_ratio = initial_occupancy_ratio;
 		stats.Replay_no = total_replay_no;
