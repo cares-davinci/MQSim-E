@@ -9,13 +9,13 @@
 			<Die_IDs>0</Die_IDs>
 			<Plane_IDs>0,1,2,3</Plane_IDs>
 			<Initial_Occupancy_Percentage>70</Initial_Occupancy_Percentage>
-			<Working_Set_Percentage>100</Working_Set_Percentage> 
+			<Working_Set_Percentage>100</Working_Set_Percentage> <!-- 50? 100?????????????????? -->
 			<Synthetic_Generator_Type>QUEUE_DEPTH</Synthetic_Generator_Type>
 			<Read_Percentage>50</Read_Percentage>
-			<Address_Distribution>RANDOM_UNIFORM</Address_Distribution> 
+			<Address_Distribution>RANDOM_UNIFORM</Address_Distribution> <!--RANDOM_UNIFORM-->
 			<Percentage_of_Hot_Region>0</Percentage_of_Hot_Region>
 			<Generated_Aligned_Addresses>true</Generated_Aligned_Addresses>
-			<Address_Alignment_Unit>1</Address_Alignment_Unit> <!-- 8-->
+			<Address_Alignment_Unit>8</Address_Alignment_Unit> <!-- 8-->
 			<Request_Size_Distribution>FIXED</Request_Size_Distribution>
 			<Average_Request_Size>8</Average_Request_Size> <!--16 -->
 			<Variance_Request_Size>0</Variance_Request_Size>
@@ -23,7 +23,7 @@
 			<Average_No_of_Reqs_in_Queue>32</Average_No_of_Reqs_in_Queue>
 			<Intensity>4096</Intensity> <!--32768-->
 			<Stop_Time>0</Stop_Time>
-			<Total_Requests_To_Generate>400000000</Total_Requests_To_Generate> 
+			<Total_Requests_To_Generate>100000000</Total_Requests_To_Generate> <!--70640000 1000000000 20000000 2000000 6000000 1000000 30000 10000000+4k=38GB --> <!-- 200000000+4k = 1.5TB-->
 		</IO_Flow_Parameter_Set_Synthetic>
 	</IO_Scenario>
 

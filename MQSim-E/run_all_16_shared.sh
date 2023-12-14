@@ -1,0 +1,13 @@
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/hm.xml | tee result/0522_16_shared/hm.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/mds.xml | tee result/0522_16_shared/mds.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/prn.xml | tee result/0522_16_shared/prn.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/proj.xml | tee result/0522_16_shared/proj.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/prxy.xml | tee result/0522_16_shared/prxy.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/rsrch.xml | tee result/0522_16_shared/rsrch.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/src1.xml | tee result/0522_16_shared/src1.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/src2.xml | tee result/0522_16_shared/src2.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/stg.xml | tee result/0522_16_shared/stg.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/ts.xml | tee result/0522_16_shared/ts.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/usr.xml | tee result/0522_16_shared/usr.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/wdev.xml | tee result/0522_16_shared/wdev.txt
+./MQSim -i ssd_config/ssd_16_16_f1_nopre_sh.xml -w workload_config/web.xml | tee result/0522_16_shared/web.txt
