@@ -17,14 +17,14 @@ namespace SSD_Components
 		unsigned int channel_no, unsigned int chip_no_per_channel, unsigned int die_no_per_chip, unsigned int plane_no_per_die,
 		unsigned int block_no_per_plane, unsigned int page_no_per_block, unsigned int page_size_in_sectors, 
 		sim_time_type avg_flash_read_latency, sim_time_type avg_flash_program_latency, 
-		double over_provisioning_ratio, unsigned int max_allowed_block_erase_count, int seed, unsigned int info) :
+		double over_provisioning_ratio, unsigned int max_allowed_block_erase_count, int seed) :
 		NVM_Firmware(id, data_cache_manager), random_generator(seed),
 		channel_no(channel_no), chip_no_per_channel(chip_no_per_channel), die_no_per_chip(die_no_per_chip), plane_no_per_die(plane_no_per_die),
 		block_no_per_plane(block_no_per_plane), page_no_per_block(page_no_per_block), page_size_in_sectors(page_size_in_sectors), 
 		avg_flash_read_latency(avg_flash_read_latency), avg_flash_program_latency(avg_flash_program_latency),
 		over_provisioning_ratio(over_provisioning_ratio), max_allowed_block_erase_count(max_allowed_block_erase_count)
 	{
-		Stats::Init_stats(channel_no, chip_no_per_channel, die_no_per_chip, plane_no_per_die, block_no_per_plane, page_no_per_block, max_allowed_block_erase_count, info);
+		Stats::Init_stats(channel_no, chip_no_per_channel, die_no_per_chip, plane_no_per_die, block_no_per_plane, page_no_per_block, max_allowed_block_erase_count);
 	}
 
 	FTL::~FTL()
@@ -976,13 +976,7 @@ namespace SSD_Components
 		val = std::to_string(Stats::Physical_write_count_subpg);
 		xmlwriter.Write_attribute_string_inline(attr, val);
 
-		attr = "Relief_write";
-		val = std::to_string(Stats::Relief_page_count);
-		xmlwriter.Write_attribute_string_inline(attr, val);
 
-		attr = "Relief_proportion";
-		val = std::to_string(Stats::Relief_proportion);
-		xmlwriter.Write_attribute_string_inline(attr, val);
 
 		attr = "Total_WAF";
 		val = std::to_string((double)Stats::Physical_write_count/Stats::Host_write_count);
@@ -1015,35 +1009,7 @@ namespace SSD_Components
 		val = std::to_string(Stats::Max_consecutive_gc_write);
 		xmlwriter.Write_attribute_string_inline(attr, val);
 
-		attr = "Relief_type";
-		val = std::to_string(Stats::Relief_type);
-		xmlwriter.Write_attribute_string_inline(attr, val);
 
-		attr = "Relief_ratio";
-		val = std::to_string((double)Stats::Relief_page_count/Stats::Physical_write_count);
-		xmlwriter.Write_attribute_string_inline(attr, val);
-
-		attr = "Reliefed_Space";
-		xmlwriter.Write_attribute(attr);
-		for (index = 0; index < Stats::WAF_index; index++){	
-			val = std::to_string(Stats::Reliefed[index]);
-			xmlwriter.Write_string(val);
-		}
-
-		attr = "Relief_Histogram";
-		xmlwriter.Write_attribute(attr);
-		for (index = 0; index <= Stats::Max_relief_count; index++){	
-			val = std::to_string(Stats::Relief_histogram[index]);
-			xmlwriter.Write_string(val);
-		}
-
-		attr = "Relief_freq";
-		val = std::to_string((double)Stats::Relief_count/Stats::Erase_count);
-		xmlwriter.Write_attribute_string_inline(attr, val);
-
-		attr = "Relief_count";
-		val = std::to_string(Stats::Relief_count);
-		xmlwriter.Write_attribute_string_inline(attr, val);
 
 		attr = "Erase_count";
 		val = std::to_string(Stats::Erase_count);

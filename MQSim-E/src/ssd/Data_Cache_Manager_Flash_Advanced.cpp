@@ -28,6 +28,9 @@ namespace SSD_Components
 			case SSD_Components::Cache_Sharing_Mode::SHARED:
 			{
 				Data_Cache_Flash* sharedCache = new Data_Cache_Flash(capacity_in_pages);
+				// js debug
+				std::cout<<"stream 0 cache size: "<<capacity_in_bytes /1024 <<" KB"<<std::endl;
+
 				per_stream_cache = new Data_Cache_Flash*[stream_count];
 				for (unsigned int i = 0; i < stream_count; i++) {
 					per_stream_cache[i] = sharedCache;
@@ -43,6 +46,8 @@ namespace SSD_Components
 				per_stream_cache = new Data_Cache_Flash*[stream_count];
 				for (unsigned int i = 0; i < stream_count; i++) {
 					per_stream_cache[i] = new Data_Cache_Flash(capacity_in_pages / stream_count);
+					// js debug
+					std::cout<<"stream "<<i<<" cache size: "<<capacity_in_bytes / stream_count /1024 <<" KB"<<std::endl;
 				}
 				dram_execution_queue = new std::queue<Memory_Transfer_Info*>[stream_count];
 				waiting_user_requests_queue_for_dram_free_slot = new std::list<User_Request*>[stream_count];
@@ -298,7 +303,8 @@ namespace SSD_Components
 		if (shared_dram_request_queue) {
 			queue_id = 0;
 		}
-		if(queue_id !=0) PRINT_ERROR("Stream_id must be 0. check Translate_lpa_to_ppa_and_dispatch()'s back_pressure array usage")
+		// js debug
+		//if(queue_id !=0) PRINT_ERROR("Stream_id must be 0. check Translate_lpa_to_ppa_and_dispatch()'s back_pressure array usage")
 
 
 		while (it != user_request->Transaction_list.end() 
@@ -392,7 +398,8 @@ namespace SSD_Components
 			}
 			else if (time_step!=0) {
 				now_time = (Simulator->Time() / SIM_TIME_TO_MICROSECONDS_COEFF);
-				fprintf(flush_interval, "%llu \n", now_time-prev_time);
+				// js : block output
+				//fprintf(flush_interval, "%llu \n", now_time-prev_time);
 				prev_time = now_time; 
 			}
 			//std::cout << "[before] trs: " << waiting_writeback_transactions[stream_id].size() << std::endl;

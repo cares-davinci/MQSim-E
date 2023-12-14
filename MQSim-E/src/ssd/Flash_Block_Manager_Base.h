@@ -43,12 +43,9 @@ namespace SSD_Components
 
 		static unsigned int SubPage_vector_size;
 		uint64_t* Invalid_Subpage_bitmap;
-		uint64_t* subProgram_bypass_bitmap;
 
-		uint64_t* Program_bypass_bitmap;
-		bool Is_relieved;
-		unsigned int Relief_count;
-		unsigned int Relief_page_count;
+
+
 					
 		stream_id_type Stream_id = NO_STREAM;
 		bool Holds_mapping_data = false;
@@ -94,6 +91,7 @@ namespace SSD_Components
 			unsigned int channel_count, unsigned int chip_no_per_channel, unsigned int die_no_per_chip, unsigned int plane_no_per_die,
 			unsigned int block_no_per_plane, unsigned int page_no_per_block);
 		virtual ~Flash_Block_Manager_Base();
+		virtual void Allocate_block_and_page_in_plane_for_online_write(const stream_id_type streamID, NVM::FlashMemory::Physical_Page_Address& address) = 0; //JY_Modified
 		virtual void Allocate_block_and_page_in_plane_for_user_write(const stream_id_type streamID, NVM::FlashMemory::Physical_Page_Address& address) = 0;
 		virtual void Allocate_block_and_page_in_plane_for_gc_write(const stream_id_type streamID, NVM::FlashMemory::Physical_Page_Address& address) = 0;
 		virtual void Allocate_block_and_page_in_plane_for_translation_write(const stream_id_type streamID, NVM::FlashMemory::Physical_Page_Address& address, bool is_for_gc) = 0;
@@ -118,8 +116,11 @@ namespace SSD_Components
 		bool Is_having_ongoing_program(const NVM::FlashMemory::Physical_Page_Address& block_address);//Cheks if block has any ongoing program request
 		bool Is_page_valid(Block_Pool_Slot_Type* block, flash_page_ID_type page_id);//Make the page invalid in the block bookkeeping record
 		bool Is_Subpage_valid(Block_Pool_Slot_Type* block, flash_page_ID_type page_id, flash_page_ID_type subpage_id);
-		bool Is_page_bypass(const NVM::FlashMemory::Physical_Page_Address& block_address);
-		void Set_relief_status(const NVM::FlashMemory::Physical_Page_Address& block_address, bool status);
+
+		//js debug: fbm debugging
+		double next_logging;
+		bool block_log;
+		void debugging();
 
 	protected:
 		PlaneBookKeepingType ****plane_manager;//Keeps track of plane block usage information

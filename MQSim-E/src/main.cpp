@@ -228,8 +228,7 @@ std::vector<std::vector<IO_Flow_Parameter_Set*>*>* read_workload_definitions(con
 	return io_scenarios;
 }
 
-void collect_results(SSD_Device& ssd, Host_System& host, const char* output_file_path)
-{
+void collect_results(SSD_Device& ssd, Host_System& host, const char* output_file_path) {
 	Utils::XmlWriter xmlwriter;
 	xmlwriter.Open(output_file_path);
 
@@ -247,22 +246,31 @@ void collect_results(SSD_Device& ssd, Host_System& host, const char* output_file
 			<< " total requests serviced:" << IO_flows[stream_id]->Get_serviced_request_count() << endl;
 		cout << "                   - device response time: " << IO_flows[stream_id]->Get_device_response_time() << " (us)"
 			<< " end-to-end request delay:" << IO_flows[stream_id]->Get_end_to_end_request_delay() << " (us)" << endl;
+		cout << "JS_output, " << IO_flows[stream_id]->ID().substr(IO_flows[stream_id]->ID().find_last_of("/")+1, IO_flows[stream_id]->ID().find_last_of(".")-IO_flows[stream_id]->ID().find_last_of("/")-1) << ", " 
+			<< IO_flows[stream_id]->Get_device_response_time() << ", "
+			<< IO_flows[stream_id]->Get_read_device_response_time() << ", "
+			<< IO_flows[stream_id]->Get_max_read_response_time() << ", "
+			<< IO_flows[stream_id]->Get_write_device_response_time() << ", "
+			<< IO_flows[stream_id]->Get_max_write_response_time() << ", "
+			<< IO_flows[stream_id]->Get_IOPS() << ", "
+			<< IO_flows[stream_id]->Get_read_ratio() << ", "
+			<< IO_flows[stream_id]->Get_Bandwidth()<< ", "
+			<< IO_flows[stream_id]->Get_Read_Bandwidth() << ", "
+			<< IO_flows[stream_id]->Get_Write_Bandwidth()
+			<< std::endl; 
 	}
 }
 
-void print_help()
-{
-	cout << "MQSim - SSD simulator with both NVMe and SATA host interface behavior, see ReadMe.md for details" << endl <<
-		"Standalone Usage:" << endl <<
-		"./MQSim [-i path/to/config/file] [-w path/to/workload/file]" << endl;
-}
+
 
 int main(int argc, char* argv[])
 {
 	string ssd_config_file_path, workload_defs_file_path;
 	if (argc != 5) {
 		// MQSim expects 2 arguments: 1) the path to the SSD configuration definition file, and 2) the path to the workload definition file
-		print_help();
+		//print_help();
+		cout << "MQSim - SSD simulator with both NVMe and SATA host interface behavior, see ReadMe.md for details" << endl <<
+			"Standalone Usage:" << endl << "./MQSim [-i path/to/config/file] [-w path/to/workload/file]" << endl;
 		return 1;
 	}
 
@@ -307,7 +315,7 @@ int main(int argc, char* argv[])
 	}
     cout << "Simulation complete; Press any key to exit." << endl;
 
-	cin.get(); // Disable if you prefer batch runs
+	//cin.get(); // Disable if you prefer batch runs
 
 	return 0;
 }

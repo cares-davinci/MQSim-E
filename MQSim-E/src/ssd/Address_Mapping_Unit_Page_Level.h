@@ -177,7 +177,11 @@ namespace SSD_Components
 		unsigned int* user_Alloc_count;
 		unsigned int* gc_Alloc_count;
 		unsigned int flush_unit_count;
-		
+	
+		// js for online read
+		unsigned int seq_count;
+		LPA_type last_lpn;
+	
 		void allocate_plane_for_user_write(NVM_Transaction_Flash_WR* transaction, bool is_for_gc = false);
 		void allocate_page_in_plane_for_user_write(NVM_Transaction_Flash_WR* transaction, bool is_for_gc);
 		void allocate_plane_for_translation_write(NVM_Transaction_Flash* transaction);

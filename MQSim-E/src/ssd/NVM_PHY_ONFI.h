@@ -27,6 +27,7 @@ namespace SSD_Components
 
 		virtual BusChannelStatus Get_channel_status(flash_channel_ID_type) = 0;
 		virtual NVM::FlashMemory::Flash_Chip* Get_chip(flash_channel_ID_type channel_id, flash_chip_ID_type chip_id) = 0;
+		virtual void Set_metadata(flash_channel_ID_type channel_id, flash_chip_ID_type chip_id, flash_die_ID_type die_id, flash_plane_ID_type plane_id, flash_block_ID_type block_id, flash_page_ID_type page_id, flash_page_ID_type subpage_id, LPA_type lpa) = 0; //JY_Modified
 		virtual LPA_type Get_metadata(flash_channel_ID_type channe_id, flash_chip_ID_type chip_id, flash_die_ID_type die_id, flash_plane_ID_type plane_id, flash_block_ID_type block_id, flash_page_ID_type page_id) = 0;//A simplification to decrease the complexity of GC execution! The GC unit may need to know the metadata of a page to decide if a page is valid or invalid. 
 		virtual bool HasSuspendedCommand(NVM::FlashMemory::Flash_Chip* chip) = 0;
 		virtual ChipStatus GetChipStatus(NVM::FlashMemory::Flash_Chip* chip) = 0;

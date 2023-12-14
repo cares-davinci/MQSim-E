@@ -320,6 +320,8 @@ namespace SSD_Components
 		std::cout << "cnt_mergible_subpgs:" <<cnt_mergible_subpgs << std::endl;
 		*/
 #endif
+
+		// js question : why do not use function issue_command_to_chip ? ==> 아래 바이패스 때문인듯?
 		unsigned int planeVector = 0;
 		for (unsigned int i = 0; i < die_no_per_chip; i++) {
 			transaction_dispatch_slots.clear();
@@ -362,6 +364,7 @@ namespace SSD_Components
 			dieID = (dieID + 1) % die_no_per_chip;
 		}
 
+		// js question : false를 없앤 이유는? ==> 위에서 어짭 처리 되어서?
 		return true;
 	}
 
@@ -418,20 +421,15 @@ namespace SSD_Components
 		flash_die_ID_type dieID = sourceQueue1->front()->Address.DieID;
 		flash_page_ID_type pageID = sourceQueue1->front()->Address.PageID;
 		flash_block_ID_type blockID = sourceQueue1->front()->Address.BlockID;
-		bool bypass = false;
-		unsigned int planeVector = 0;
-		NVM_Transaction_Flash_WR* bypassed_wr = NULL;
+		unsigned int planeVector = 0; 
+
+		
 		
 		for (unsigned int i = 0; i < die_no_per_chip; i++) {
 			transaction_dispatch_slots.clear();
 			planeVector = 0;
 
 			for (Flash_Transaction_Queue::iterator it = sourceQueue1->begin(); it != sourceQueue1->end(); ) {
-				if ((((NVM_Transaction_Flash_WR*)*it)->RelatedRead != NULL) && (bypass != true))
-				{
-					bypass = true;
-					bypassed_wr = (NVM_Transaction_Flash_WR*)*it;
-				}
 				
 				if (((NVM_Transaction_Flash_WR*)*it)->RelatedRead == NULL && (*it)->Address.DieID == dieID && !(planeVector & 1 << (*it)->Address.PlaneID)) {					
 					//Check for identical pages when running multiplane command
@@ -449,16 +447,8 @@ namespace SSD_Components
 			}
 
 			if (transaction_dispatch_slots.size() > 0){
-				if ((bypass == true) && (bypassed_wr->Address.PageID == transaction_dispatch_slots.front()->Address.PageID)) {
-					//when bypass is true, and transaction address is same with bypassed transaction. clear dispatch slots queue.- for multi-plane operation later.							
-					transaction_dispatch_slots.clear();
-				}
-				else{
-					//when bypass is false, delete transactions from sourceQueue. --> normal execution.
-					//when bypass is true, but transaction address is different.  --> normal execution.
-					for (std::list<NVM_Transaction_Flash*>::iterator it = transaction_dispatch_slots.begin();it != transaction_dispatch_slots.end(); it++) {
-						sourceQueue1->remove(*it);
-					}
+				for (std::list<NVM_Transaction_Flash*>::iterator it = transaction_dispatch_slots.begin();it != transaction_dispatch_slots.end(); it++) {
+					sourceQueue1->remove(*it);
 				}
 			}
 			
@@ -485,6 +475,7 @@ namespace SSD_Components
 			transaction_dispatch_slots.clear();
 			dieID = (dieID + 1) % die_no_per_chip;
 		}
+
 
 		return true;
 	}

@@ -25,6 +25,7 @@ namespace Utils
 			while (end < size) {
 				if (str[end] == delimiter && start <= end) {
 					output_tokens_list.push_back(std::string(str.substr(start, end - start + 1)));
+					//output_tokens_list.push_back(std::string(str.substr(start, end - start)));
 					start = end + 1;
 				}
 				end++;

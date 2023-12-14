@@ -14,6 +14,7 @@ namespace SSD_Components
 		channel_count(channel_count), chip_no_per_channel(chip_no_per_channel), die_no_per_chip(die_no_per_chip), plane_no_per_die(plane_no_per_die),
 		block_no_per_plane(block_no_per_plane), pages_no_per_block(page_no_per_block)
 	{
+
 		plane_manager = new PlaneBookKeepingType***[channel_count];
 		for (unsigned int channelID = 0; channelID < channel_count; channelID++) {
 			plane_manager[channelID] = new PlaneBookKeepingType**[chip_no_per_channel];
@@ -56,24 +57,19 @@ namespace SSD_Components
 							Block_Pool_Slot_Type::SubPage_vector_size = (pages_no_per_block*ALIGN_UNIT_SIZE) / (sizeof(uint64_t) * 8) + ((pages_no_per_block * ALIGN_UNIT_SIZE) % (sizeof(uint64_t) * 8) == 0 ? 0 : 1);
 							//std::cout << "subpage vector size: " << Block_Pool_Slot_Type::SubPage_vector_size << std::endl;
 							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Invalid_Subpage_bitmap = new uint64_t[Block_Pool_Slot_Type::SubPage_vector_size];
-							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].subProgram_bypass_bitmap = new uint64_t[Block_Pool_Slot_Type::SubPage_vector_size];
+							
 							for (unsigned int i = 0; i < Block_Pool_Slot_Type::SubPage_vector_size; i++) {
 								plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Invalid_Subpage_bitmap[i] = All_VALID_PAGE;
-								plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].subProgram_bypass_bitmap[i] = All_VALID_PAGE;
 							}
 							
 
 							Block_Pool_Slot_Type::Page_vector_size = pages_no_per_block / (sizeof(uint64_t) * 8) + (pages_no_per_block % (sizeof(uint64_t) * 8) == 0 ? 0 : 1);
-							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Invalid_page_bitmap = new uint64_t[Block_Pool_Slot_Type::Page_vector_size];
-							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Program_bypass_bitmap = new uint64_t[Block_Pool_Slot_Type::Page_vector_size];							
+							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Invalid_page_bitmap = new uint64_t[Block_Pool_Slot_Type::Page_vector_size];		
 							for (unsigned int i = 0; i < Block_Pool_Slot_Type::Page_vector_size; i++) {
-								plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Invalid_page_bitmap[i] = All_VALID_PAGE;
-								plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Program_bypass_bitmap[i] = All_VALID_PAGE;																
+								plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Invalid_page_bitmap[i] = All_VALID_PAGE;														
 							}
 
-							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Is_relieved = false;
-							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Relief_count = 0;
-							plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Relief_page_count = 0;							
+						
 							plane_manager[channelID][chipID][dieID][planeID].Add_to_free_block_pool(&plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID], false);
 						}
 						plane_manager[channelID][chipID][dieID][planeID].Data_wf = new Block_Pool_Slot_Type*[total_concurrent_streams_no];
@@ -89,20 +85,26 @@ namespace SSD_Components
 			}
 		}
 
-		// default setting for normal test... 0 relief proportion.
-		Stats::Relief_proportion = (double)0/page_no_per_block; //channel_count*chip_no_per_channel*plane_no_per_die*block_no_per_plane*6; // 1 WL per block
+
 		Stats::Physical_page_count = channel_count*chip_no_per_channel*plane_no_per_die*block_no_per_plane*page_no_per_block;
+
+		//js debug: fbm debugging
+		next_logging = 90;
+		block_log = true;
+		debugging();
 	}
 
 	Flash_Block_Manager_Base::~Flash_Block_Manager_Base() 
 	{
+		//js debug: fbm debugging
+		block_log = true;
+		debugging();
 		for (unsigned int channel_id = 0; channel_id < channel_count; channel_id++) {
 			for (unsigned int chip_id = 0; chip_id < chip_no_per_channel; chip_id++) {
 				for (unsigned int die_id = 0; die_id < die_no_per_chip; die_id++) {
 					for (unsigned int plane_id = 0; plane_id < plane_no_per_die; plane_id++) {
 						for (unsigned int blockID = 0; blockID < block_no_per_plane; blockID++) {
-							delete[] plane_manager[channel_id][chip_id][die_id][plane_id].Blocks[blockID].Invalid_page_bitmap;
-							delete[] plane_manager[channel_id][chip_id][die_id][plane_id].Blocks[blockID].Program_bypass_bitmap;														
+							delete[] plane_manager[channel_id][chip_id][die_id][plane_id].Blocks[blockID].Invalid_page_bitmap;													
 						}
 						delete[] plane_manager[channel_id][chip_id][die_id][plane_id].Blocks;
 						delete[] plane_manager[channel_id][chip_id][die_id][plane_id].GC_wf;
@@ -123,12 +125,6 @@ namespace SSD_Components
 		this->gc_and_wl_unit = gcwl;
 	}
 
-	unsigned int Relief_page_per_blk[] = {0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45,  48,51,54,57,60,63}; // 0 ~ 9 10~15
-	uint64_t Bypass_bitmap[] = {0,0x0000000070,0x0000000770,0x0000007770,0x0000077770,0x0000777770,0x0007777770,0x0077777770,0x0777777770,0x7777777770, 
-								0x0000077777777770,0x0000777777777770, 0x0007777777777770, 0x0077777777777770, 0x0777777777777770, 0x7777777777777770,
-								0x7777777777777777,0x7777777777777fff,0x7777777777ffffff,							//16, 17, 18
-								0x7777777fffffffff,0x7777ffffffffffff,0x7fffffffffffffff,							//19, 20, 21
-								}; // 0 ~ 9 10~15
 
 	void Block_Pool_Slot_Type::Erase()
 	{
@@ -142,17 +138,9 @@ namespace SSD_Components
 
 		for (unsigned int i = 0; i < Block_Pool_Slot_Type::SubPage_vector_size; i++) {
 			Invalid_Subpage_bitmap[i] = All_VALID_PAGE;
-			//subProgram_bypass_bitmap[i] = All_VALID_PAGE;
 		}
 
-		Is_relieved = false;
-#if 1		
-		Relief_page_count = Relief_page_per_blk[Stats::Relief_type];				// for TEMPORAL TEST __FIXME__
-		Program_bypass_bitmap[0] = Bypass_bitmap[Stats::Relief_type];	// for TEMPORAL TEST __FIXME__
-#else
-		Relief_page_count = 24;				// for TEMPORAL TEST __FIXME__
-		Program_bypass_bitmap[0] = 0x777777770;	// for TEMPORAL TEST __FIXME__
-#endif
+
 		Stream_id = NO_STREAM;
 		Holds_mapping_data = false;
 		Erase_transaction = NULL;
@@ -202,15 +190,14 @@ namespace SSD_Components
 	}
 
 	unsigned int PlaneBookKeepingType::Get_free_block_pool_size()
-	{
+	{	
 		return (unsigned int)Free_block_pool.size();
 	}
 
 	void PlaneBookKeepingType::Add_to_free_block_pool(Block_Pool_Slot_Type* block, bool consider_dynamic_wl)
 	{
 		if (consider_dynamic_wl) {
-			//std::pair<unsigned int, Block_Pool_Slot_Type*> entry(block->Erase_count, block);
-			std::pair<unsigned int, Block_Pool_Slot_Type*> entry(block->Relief_count, block);
+			std::pair<unsigned int, Block_Pool_Slot_Type*> entry(block->Erase_count, block);
 			Free_block_pool.insert(entry);
 		} else {
 			std::pair<unsigned int, Block_Pool_Slot_Type*> entry(0, block);
@@ -328,36 +315,67 @@ namespace SSD_Components
 		return false;
 	}
 
-	bool Flash_Block_Manager_Base::Is_page_bypass(const NVM::FlashMemory::Physical_Page_Address& block_address)
-	{
-		PlaneBookKeepingType *plane_record = &plane_manager[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID];		
 
-		if ( (plane_record->Blocks[block_address.BlockID].Is_relieved == true) && 
-			  ((plane_record->Blocks[block_address.BlockID].Program_bypass_bitmap[block_address.PageID / 64] & (((uint64_t)1) << block_address.PageID)) != 0) ) {
-			return true;
+
+
+
+	//js debug: fbm debugging
+	void Flash_Block_Manager_Base::debugging() {
+
+		if(block_log == true){
+			std::cout << "Block Manager Debug: " << std::endl;
 		}
-		return false;
-	}
 
-	void Flash_Block_Manager_Base::Set_relief_status(const NVM::FlashMemory::Physical_Page_Address& block_address, bool status)
-	{
-		PlaneBookKeepingType *plane_record = &plane_manager[block_address.ChannelID][block_address.ChipID][block_address.DieID][block_address.PlaneID];		
+		int total_pages_count = 0;
+		int total_free_pages_count = 0;
+		int total_valid_pages_count = 0;
+		int total_invalid_pages_count = 0;
+		int total_erase_count = 0;
+		for (unsigned int channelID = 0; channelID < channel_count; channelID++) {
+			for (unsigned int chipID = 0; chipID < chip_no_per_channel; chipID++) {
+				for (unsigned int dieID = 0; dieID < die_no_per_chip; dieID++) {
+					//Initialize plane book keeping data structure
+					for (unsigned int planeID = 0; planeID < plane_no_per_die; planeID++) {
+						total_free_pages_count += plane_manager[channelID][chipID][dieID][planeID].Free_subpages_count;
+						total_valid_pages_count += plane_manager[channelID][chipID][dieID][planeID].Valid_subpages_count;
+						total_invalid_pages_count += plane_manager[channelID][chipID][dieID][planeID].Invalid_subpages_count;
+						total_pages_count += plane_manager[channelID][chipID][dieID][planeID].Total_subpages_count;
+						
+						if(block_log == true){
+							std::cout << "\t" << channelID << " " << chipID << " " << dieID << " " << planeID << ": F(" << plane_manager[channelID][chipID][dieID][planeID].Free_subpages_count << ", " 
+								<< ((double)plane_manager[channelID][chipID][dieID][planeID].Free_subpages_count / plane_manager[channelID][chipID][dieID][planeID].Total_subpages_count)
+								<< " ) V( "<< plane_manager[channelID][chipID][dieID][planeID].Valid_subpages_count << " ) IV( " << plane_manager[channelID][chipID][dieID][planeID].Invalid_subpages_count << " )" << std::endl;
+						}
 
-		plane_record->Blocks[block_address.BlockID].Is_relieved = status;
-
-		if (status == true){
-			unsigned int prev_relief_count = plane_record->Blocks[block_address.BlockID].Relief_count;
-			Stats::Relief_histogram[prev_relief_count]--;
-			
-			plane_record->Blocks[block_address.BlockID].Relief_count = prev_relief_count+1;
-			Stats::Relief_histogram[prev_relief_count+1]++;
-
-			if (prev_relief_count+1 > Stats::Max_relief_count)
-			{
-				Stats::Max_relief_count = prev_relief_count+1;
+						for (unsigned int blockID = 0; blockID < block_no_per_plane; blockID++) {
+							total_erase_count += plane_manager[channelID][chipID][dieID][planeID].Blocks[blockID].Erase_count;
+						}
+					}
+				}
 			}
+		}
 
-			Stats::Relief_count++;
+		if(block_log == true){
+			std::cout << "\t total free subpages count: " << total_free_pages_count << std::endl;
+			std::cout << "\t total valid subpages count: " << total_valid_pages_count << std::endl;
+			std::cout << "\t total invalid subpages count: " << total_invalid_pages_count << std::endl;
+			std::cout << "\t total erase count: " << total_erase_count << std::endl;
+			block_log = false;
+		}
+
+		if(((double)total_free_pages_count / total_pages_count * 100) < next_logging){
+			if(next_logging > 10){
+				next_logging -= 10;
+				block_log = true;
+			}
+			else if(next_logging >1){
+				next_logging -= 2;
+				block_log = true;
+			}
+			else{
+				block_log = true;
+			}
 		}
 	}
+
 }

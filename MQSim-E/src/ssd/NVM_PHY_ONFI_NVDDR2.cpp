@@ -70,6 +70,10 @@ namespace SSD_Components {
 		return channels[channelID]->Chips[chipID];
 	}
 
+	void NVM_PHY_ONFI_NVDDR2::Set_metadata(flash_channel_ID_type channel_id, flash_chip_ID_type chip_id, flash_die_ID_type die_id, flash_plane_ID_type plane_id, flash_block_ID_type block_id, flash_page_ID_type page_id, flash_page_ID_type subpage_id, LPA_type lpa){
+        channels[channel_id]->Chips[chip_id]->Set_metadata(die_id, plane_id, block_id, page_id, subpage_id, lpa);
+    } //JY_Modified
+
 	LPA_type NVM_PHY_ONFI_NVDDR2::Get_metadata(flash_channel_ID_type channe_id, flash_chip_ID_type chip_id, flash_die_ID_type die_id, flash_plane_ID_type plane_id, flash_block_ID_type block_id, flash_page_ID_type page_id)//A simplification to decrease the complexity of GC execution! The GC unit may need to know the metadata of a page to decide if a page is valid or invalid. 
 	{
 		return channels[channe_id]->Chips[chip_id]->Get_metadata(die_id, plane_id, block_id, page_id);
@@ -176,10 +180,10 @@ namespace SSD_Components {
 					std::cout << "GC_WL read (send_command_to_chip)" << std::endl;
 				}
 				*/
-				if ((*it)->Stream_id != 0) {
-					std::cout << "[ERROR] stream_id: (send_command_to_chip)" << (*it)->Stream_id << std::endl;
-					exit(1);
-				}
+				//js debug
+				//std::cout<<"send command to chip: "<< (int)(*it)->Source << " " << (int)(*it)->Type << ", " << (int)(*it)->Address.ChannelID << ", " << (int)(*it)->Address.ChipID << ", " << (int)(*it)->Address.DieID << ", " << (int)(*it)->Address.PlaneID
+				//	<< ", " << (int)(*it)->Address.BlockID <<  ", " << (int)(*it)->Address.PageID << ", " << (int)(*it)->Address.subPageID << std::endl;
+
 			dieBKE->ActiveTransactions.push_back(*it);
 			//
 
@@ -197,8 +201,21 @@ namespace SSD_Components {
 			
 			//if ((((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB != NULL) && ((((NVM_Transaction_Flash*)(*it))->Physical_address_determined))) {
 			//std::cout << "[DEBUG GC] (NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB.size(): " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB.size() << std::endl;
-			if ((((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB.size() != 0) && ((((NVM_Transaction_Flash*)(*it))->Physical_address_determined))) {
+			if ((((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB.size() != 0) && ((((NVM_Transaction_Flash*)(*it))->Physical_address_determined)) && ((*it)->Type == Transaction_Type::WRITE)) {
 				for (int idx = 0; idx < ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB.size(); idx++) {
+
+					// js debug
+					/*
+					std::cout<<"test "<< (int)(*it)->Type << std::endl;
+					std::cout<<"\t related write: "<< (int)(*it)->Source << " " << (int)(*it)->Type << ", " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address.ChannelID 
+					<< ", " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address.ChipID 
+					<< ", " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address.DieID 
+					<< ", " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address.PlaneID
+					<< ", " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address.BlockID 
+					<<  ", " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address.PageID 
+					<< ", " << ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address.subPageID << std::endl;
+					*/
+					
 					dieBKE->ActiveCommand->Addresses_subpgs.push_back(((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->Address);
 					NVM::FlashMemory::SubPageMetadata metadata_subpg;
 					metadata_subpg.LPA = ((NVM_Transaction_Flash_WR*)(*it))->RelatedWrite_SUB[idx]->LPA;
@@ -209,6 +226,20 @@ namespace SSD_Components {
 			//std::cout << "[DEBUG GC] (NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB.size(): " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB.size() << std::endl;
 			if ((((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB.size() != 0) && ((*it)->Type == Transaction_Type::READ)) {
 				for (int idx = 0; idx < ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB.size(); idx++) {
+
+					// js debug
+					/*
+					std::cout<<"\t related read: "<< (int)(*it)->Source << " " << (int)(*it)->Type 
+					<< ", " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address.ChannelID 
+					<< ", " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address.ChipID 
+					<< ", " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address.DieID 
+					<< ", " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address.PlaneID
+					<< ", " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address.BlockID 
+					<<  ", " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address.PageID 
+					<< ", " << ((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address.subPageID << std::endl;
+					*/
+					
+
 					dieBKE->ActiveCommand->Addresses_subpgs.push_back(((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB[idx]->Address);
 					NVM::FlashMemory::SubPageMetadata metadata_subpg;
 					//when this is read tr, LPA is NO_LPA. LPA is assigned in Flash_Chip::finish_command_execution().
@@ -581,10 +612,6 @@ namespace SSD_Components {
 			{
 				chipBKE->WaitingReadTXCount++;
 				if (_my_instance->channels[chip->ChannelID]->GetStatus() == BusChannelStatus::IDLE) {
-					if ((*it)->Stream_id != 0) {
-						std::cout << "[DOODU_ERROR] stream_id: " << (*it)->Stream_id << std::endl;
-						exit(1);
-					}
 					_my_instance->transfer_read_data_from_chip(chipBKE, dieBKE, (*it));
 				}
 				else

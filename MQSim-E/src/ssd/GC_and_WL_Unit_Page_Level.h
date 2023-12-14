@@ -53,7 +53,7 @@ namespace SSD_Components
 		int read_pages();
 		int write_pages();	
 		bool is_WAF_saturated(double& diff);
-		void select_relief_mode();
+
 		
 		std::list<NVM_Transaction*> waiting_submit_transaction; //used for combine transactions (mapping granularity) into big transaction (NAND PAGE granularity)
 		

@@ -3,8 +3,7 @@
 #include "Flash_Block_Manager.h"
 #include "Stats.h"
 
-//#define RELIEF_HOST_ACTIVE_BLOCK
-//#define RELIEF_GC_ACTIVE_BLOCK
+
 
 
 namespace SSD_Components
@@ -21,12 +20,8 @@ namespace SSD_Components
 	{
 	}
 	
-	//assign PageID & subPageID
-	void Flash_Block_Manager::Allocate_block_and_page_in_plane_for_user_write(const stream_id_type stream_id, NVM::FlashMemory::Physical_Page_Address& page_address)
+	void Flash_Block_Manager::Allocate_block_and_page_in_plane_for_online_write(const stream_id_type stream_id, NVM::FlashMemory::Physical_Page_Address& page_address) // JY_Modified
 	{
-
-
-		
 		PlaneBookKeepingType* plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
 		page_address.BlockID = plane_record->Data_wf[stream_id]->BlockID;
 		//std::cout << "Current_subpage_write_index: " << plane_record->Data_wf[stream_id]->Current_subpage_write_index<< std::endl;
@@ -42,48 +37,49 @@ namespace SSD_Components
 			plane_record->Valid_pages_count++;
 			plane_record->Free_pages_count--;
 		}
+
+		if(plane_record->Data_wf[stream_id]->Current_page_write_index == pages_no_per_block) {
+			plane_record->Data_wf[stream_id] = plane_record->Get_a_free_block(stream_id, false);
+		}
+
+		plane_record->Check_bookkeeping_correctness(page_address);
+	}
+	
+	
+	//assign PageID & subPageID
+	void Flash_Block_Manager::Allocate_block_and_page_in_plane_for_user_write(const stream_id_type stream_id, NVM::FlashMemory::Physical_Page_Address& page_address)
+	{
+		PlaneBookKeepingType* plane_record = &plane_manager[page_address.ChannelID][page_address.ChipID][page_address.DieID][page_address.PlaneID];
+		page_address.BlockID = plane_record->Data_wf[stream_id]->BlockID;
+		//std::cout << "Current_subpage_write_index: " << plane_record->Data_wf[stream_id]->Current_subpage_write_index<< std::endl;
+		page_address.subPageID = plane_record->Data_wf[stream_id]->Current_subpage_write_index++;
+		page_address.PageID = plane_record->Data_wf[stream_id]->Current_page_write_index;
+		//std::cout << "page_address.subPageID: " << page_address.subPageID << std::endl;
+		plane_record->Valid_subpages_count++;
+		plane_record->Free_subpages_count--;
+
+		if (plane_record->Data_wf[stream_id]->Current_subpage_write_index == ALIGN_UNIT_SIZE) {
+			plane_record->Data_wf[stream_id]->Current_subpage_write_index = 0;
+			plane_record->Data_wf[stream_id]->Current_page_write_index++;
+			plane_record->Valid_pages_count++;
+			plane_record->Free_pages_count--;
+		}
+		/* js delete
 		else {
+			// js question : do again? => 삭제해도 될듯
 			page_address.PageID = plane_record->Data_wf[stream_id]->Current_page_write_index;
 			//page_address.subPageID = plane_record->Data_wf[stream_id]->Current_subpage_write_index++;
 		}
+		*/
 		
-
 		program_transaction_issued(page_address);
 
-		//The current write frontier block is written to the end
 		if(plane_record->Data_wf[stream_id]->Current_page_write_index == pages_no_per_block) {
-			bool bRelief = false;
-#ifdef RELIEF_HOST_ACTIVE_BLOCK		
-//			if (Stats::Relief_page_count < Stats::Relief_proportion*Stats::Physical_write_count){
-			if (Stats::Interval_Relief_page_count < Stats::Relief_proportion*Stats::Interval_Physical_write_count){
-				bRelief = true; // __FIXME_ TEMPROAL..
-			}
-#endif
-			//Assign a new write frontier block
-			if (bRelief == true){
-				plane_record->Data_wf[stream_id] = plane_record->Get_a_free_block(stream_id, false);
-			}
-			else{
-				plane_record->Data_wf[stream_id] = plane_record->Get_a_free_block_b(stream_id, false);
-			}
-
-			// need to check quotal.
-			NVM::FlashMemory::Physical_Page_Address new_page_address(page_address);
-			new_page_address.BlockID = plane_record->Data_wf[stream_id]->BlockID;
-			Set_relief_status(new_page_address, bRelief);
-
-			//gc_and_wl_unit->Check_gc_required(plane_record->Get_free_block_pool_size(), page_address);
-
-			if ( (page_address.ChannelID == 0) && (page_address.ChipID == 0) && (page_address.PlaneID == 0))
-			{
-				if ((Stats::Host_alloc % 1000) == 0)
-				{
-					PRINT_MESSAGE("  New Host active : " << plane_record->Data_wf[stream_id]->BlockID << " -- " << Stats::Host_alloc << " stream	  " << stream_id << " max gc write info : " << Stats::Max_consecutive_gc_write << " u: " << Stats::Utilization << " R: " << Stats::Cur_relief_page_count);
-				}
-				Stats::Host_alloc++;
-			}
+			plane_record->Data_wf[stream_id] = plane_record->Get_a_free_block(stream_id, false);
 		}
-		
+
+
+	
 		plane_record->Check_bookkeeping_correctness(page_address);
 	}
 	
@@ -93,20 +89,11 @@ namespace SSD_Components
 
 		//The current write frontier block is written to the end
 		if (plane_record->GC_wf[stream_id]->Current_page_write_index == pages_no_per_block) {
-			bool bRelief = false;
+
 			NVM::FlashMemory::Physical_Page_Address tmp_page_address;
 			PlaneBookKeepingType *tmp_plane_record;
 
-			if ((page_address.ChannelID != 0) || (page_address.ChipID != 0) || (page_address.DieID != 0) || (page_address.PlaneID != 0))
-			{
-				PRINT_MESSAGE("NOT EXPECTED " << page_address.ChannelID << " " << page_address.PlaneID);
-			}
 
-#ifdef RELIEF_GC_ACTIVE_BLOCK
-			if (Stats::Interval_Relief_page_count < Stats::Relief_proportion*Stats::Interval_Physical_write_count) {
-				bRelief = true;
-			}
-#endif
 			for (unsigned int channelID = 0; channelID < channel_count; channelID++) {
 				tmp_page_address.ChannelID = channelID;
 				for (unsigned int chipID = 0; chipID < chip_no_per_channel; chipID++) {
@@ -117,16 +104,16 @@ namespace SSD_Components
 							tmp_page_address.PlaneID = planeID;
 							tmp_plane_record = &plane_manager[tmp_page_address.ChannelID][tmp_page_address.ChipID][tmp_page_address.DieID][tmp_page_address.PlaneID];
 
+							// js question : what is this?
 							//Assign a new write frontier block
-							if (bRelief == true) {
+							//if (bRelief == true) {
 								tmp_plane_record->GC_wf[stream_id] = tmp_plane_record->Get_a_free_block(stream_id, false);
-							}
-							else {
-								tmp_plane_record->GC_wf[stream_id] = tmp_plane_record->Get_a_free_block_b(stream_id, false);
-							}
+							//}
+							//else {
+							//	tmp_plane_record->GC_wf[stream_id] = tmp_plane_record->Get_a_free_block_b(stream_id, false);
+							//}
 
 							tmp_page_address.BlockID = tmp_plane_record->GC_wf[stream_id]->BlockID;
-							Set_relief_status(tmp_page_address, bRelief);
 						}
 					}
 				}
@@ -146,6 +133,7 @@ namespace SSD_Components
 			plane_record->GC_wf[stream_id]->Current_subpage_write_index = 0;
 		}
 		else {
+			// js question : why do again? => 삭제 예정
 			page_address.PageID = plane_record->GC_wf[stream_id]->Current_page_write_index;
 		}
 
@@ -297,6 +285,7 @@ namespace SSD_Components
 			plane_record->Free_pages_count--;
 		}
 		else {
+			// js question : again? => 삭제 예정
 			page_address.PageID = plane_record->Translation_wf[streamID]->Current_page_write_index;
 		}
 

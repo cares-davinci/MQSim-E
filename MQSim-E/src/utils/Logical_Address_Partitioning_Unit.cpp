@@ -146,7 +146,7 @@ namespace Utils
 							lsa_count += (LHA_type)((block_no_per_plane * page_no_per_block * sector_no_per_page * (1.0 - overprovisioning_ratio) *
 								1.0 / double(resource_list[stream_channel_ids[stream_id][channel_id]][stream_chip_ids[stream_id][chip_id]][stream_die_ids[stream_id][die_id]][stream_plane_ids[stream_id][plane_id]])));
 
-#endif	d
+#endif
 						}
 					}
 				}
@@ -162,6 +162,15 @@ namespace Utils
 			end_lhas_per_flow.push_back(total_lha_no + lsa_count_per_stream[stream_id] - 1);
 			total_lha_no += lsa_count_per_stream[stream_id];
 		}
+
+		// js for debug
+		for (unsigned int stream_id = 0; stream_id < concurrent_stream_no; stream_id++) {
+			std::cout<<"stream " << stream_id<<" lba range (sector): " << start_lhas_per_flow[stream_id]<<", "<<end_lhas_per_flow[stream_id]<<std::endl;
+		}
+		for (unsigned int stream_id = 0; stream_id < concurrent_stream_no; stream_id++) {
+			std::cout<<"stream " << stream_id<<" physical sector #: " << pdas_per_flow[stream_id]<<std::endl;
+		}
+
 
 		initialized = true;
 	}

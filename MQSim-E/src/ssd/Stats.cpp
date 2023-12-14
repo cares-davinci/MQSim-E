@@ -49,7 +49,7 @@ namespace SSD_Components
 	double Stats::Accumulated_WAI = 0;
 	double Stats::WAF[MAX_WAF_HISTORY] = {0, }; 	// Physical Write / Host Write
 	double Stats::WAI[MAX_WAF_HISTORY] = {0, };
-	double Stats::Reliefed[MAX_WAF_HISTORY] = {0, };
+
 	
 	unsigned long Stats::Host_write_count = 0;
 	unsigned long Stats::Host_write_count_subpgs = 0;
@@ -60,29 +60,22 @@ namespace SSD_Components
 	unsigned long Stats::Prev_physical_write_count = 0;
 	unsigned int Stats::Interval_Physical_write_count = 0;
 
-	double Stats::Relief_proportion = 0;	
-	unsigned long Stats::Relief_page_count = 0;
-	unsigned long Stats::Prev_relief_page_count = 0;
-	unsigned int Stats::Cur_relief_page_count = 0;
-	unsigned int Stats::Interval_Relief_page_count = 0;	
+
 
 	unsigned int Stats::Host_alloc = 0;
 	unsigned int Stats::GC_count = 0;
 	unsigned int Stats::Consecutive_gc_write = 0;
 	unsigned int Stats::Max_consecutive_gc_write = 0;
 
-	unsigned int Stats::Relief_type = 0;
 	unsigned int Stats::Physical_page_count = 0;
-	unsigned int Stats::Max_relief_count = 0;
-	unsigned int Stats::Relief_histogram[30];
 
-	unsigned long Stats::Relief_count = 0;
+
 	unsigned long Stats::Erase_count = 0;
 
-	double Stats::Relief_WAF_Table[MAX_RELIEF_MODE] = {0, };
+
 
 	void Stats::Init_stats(unsigned int channel_no, unsigned int chip_no_per_channel, unsigned int die_no_per_chip, unsigned int plane_no_per_die, 
-		unsigned int block_no_per_plane, unsigned int page_no_per_block, unsigned int max_allowed_block_erase_count, unsigned int info)
+		unsigned int block_no_per_plane, unsigned int page_no_per_block, unsigned int max_allowed_block_erase_count)
 	{
 		Block_erase_histogram = new unsigned int ****[channel_no];
 		for (unsigned int channel_cntr = 0; channel_cntr < channel_no; channel_cntr++) {
@@ -139,35 +132,16 @@ namespace SSD_Components
 		Prev_physical_write_count = 0;
 		Interval_Physical_write_count = 0;
 				
-		Relief_proportion = 0;	
-		Relief_page_count = 0;
-		Prev_relief_page_count = 0;
-		Cur_relief_page_count = 0;
-		Interval_Relief_page_count = 0;	
+
 			
 		Host_alloc = 0;
 		GC_count = 0;
 		Consecutive_gc_write = 0;
 		Max_consecutive_gc_write = 0;
 
-		if (info > 21){
-			PRINT_MESSAGE("Relief Type : " << info << "  adjusted to 18");
-			info = 18;
-		}
-		Relief_type = info;
-		Max_relief_count = 0;
-		
-		for (unsigned int index = 0; index < 30; index++){
-			Relief_histogram[index] = 0;
-		}
-		Relief_histogram[0] = channel_no*chip_no_per_channel*die_no_per_chip*plane_no_per_die*block_no_per_plane;
 
-		Relief_count = 0;
 		Erase_count = 0;
 
-		for (unsigned int index = 0; index < MAX_RELIEF_MODE; index++){
-			Relief_WAF_Table[index] = 0;
-		}			
 	}
 
 	void Stats::Clear_stats(unsigned int channel_no, unsigned int chip_no_per_channel, unsigned int die_no_per_chip, unsigned int plane_no_per_die,

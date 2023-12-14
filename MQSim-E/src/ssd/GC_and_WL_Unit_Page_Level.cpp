@@ -5,7 +5,7 @@
 #include "Flash_Block_Manager.h"
 #include "FTL.h"
 #include <algorithm>
-#include <windows.h>
+//#include <windows.h>
 bool GC_on_for_debug = false;
 bool read_subpg_offset_reaches_end = false;
 int total_gc_rw_interval_ER = 0; //Total made read/write transaction in interval between 'select vicitim block' and 'erase block'
@@ -80,6 +80,8 @@ namespace SSD_Components
 		PlaneBookKeepingType* pbke = &(block_manager->plane_manager[0][0][0][0]);
 		unsigned int free_block_count = pbke->Get_free_block_pool_size();
 		if (pbke->Get_free_block_pool_size() < 2) {
+			// js debug
+			std::cout<<"low free block"<<std::endl;
 			//std::cout << "[pages: " << pbke->Get_free_block_pool_size();// << ", id: " << pbke->Free_block_pool.begin()->second->BlockID << "] ";
 		}
 		if ((free_block_count > block_pool_gc_threshold) && (gc_status != GCStatus::WRITE_STATE)) {
@@ -103,22 +105,10 @@ namespace SSD_Components
 						Block_Pool_Slot_Type* block = victim_blocks[victim_index];
 						NVM::FlashMemory::Physical_Page_Address& address = gc_victim_address[victim_index];
 						static int invalid_block_count = 0;
-						if (block->Invalid_subpage_count != pages_no_per_block*ALIGN_UNIT_SIZE)
-						{
-							//std::cout << "INVALID: " << block->Invalid_subpage_count << " " << block->Current_page_write_index << " ";
-							////PRINT_MESSAGE(++invalid_block_count << "   INVALID: " << block->Invalid_page_count << " "<< block->Current_page_write_index <<  " " << block->Stream_id);
-							////PRINT_MESSAGE("   ch : " <<address.ChannelID<< " way: "<< address.ChipID << " plane : " << address.PlaneID << " block : " << address.BlockID << std::endl);
-						}
 
-						if (block->Is_relieved == true)
-						{
-							Stats::Cur_relief_page_count -= block->Relief_page_count;
-						}
 
 						pbke = block_manager->Get_plane_bookkeeping_entry(address);
-						if (address.ChannelID == 0 && address.ChipID == 0 && address.PlaneID == 0 && address.BlockID == 247) {
-							//std::cout << "[DEBUG GC-read_pages()] "block id: 247, erase block (pg movements should have been processed)" << std::endl;
-						}
+
 						pbke->Ongoing_erase_operations.erase(pbke->Ongoing_erase_operations.find(block->BlockID));
 						block_manager->Add_erased_block_to_pool(address);
 						block_manager->GC_WL_finished(address);
@@ -212,7 +202,8 @@ namespace SSD_Components
 			
 			//combine and submit
 			//Step 1. sort and combine
-			stable_sort(waiting_writeback_transaction.begin(), waiting_writeback_transaction.end(), cmp_gc);
+			//stable_sort(waiting_writeback_transaction.begin(), waiting_writeback_transaction.end(), cmp_gc);
+			waiting_writeback_transaction.sort(cmp_gc);
 
 			int align_unit = ALIGN_UNIT_SIZE;
 			bool stop_iterate = false;
@@ -312,12 +303,16 @@ namespace SSD_Components
 		for (; cur_page_offset < pages_no_per_block; cur_page_offset++) {
 			//parallel process across all planes in SSD. 
 			//std::cout << "[DEBUG GC-read_pages()] cur_page_offset: " << cur_page_offset<< std::endl;
-			for (int victim_index = 0; victim_index < gc_unit_count; victim_index++) {
+			for (int victim_index = 0; victim_index < gc_unit_count; victim_index++) {				
 				block = victim_blocks[victim_index];
+				/* js stream
+				// js question : victim을 선정할 때 stream을 확인하고 선정했는가?
 				if (block->Stream_id != 0) {
 					std::cout << "[DOODU ERROR] Stream_id ! =0 (read_pages()) " << std::endl;
 					exit(1);
 				}
+				*/
+				// js question 
 #if DEBUG_GC_READ
 				for (cur_subpage_offset; cur_subpage_offset < ALIGN_UNIT_SIZE; cur_subpage_offset++) {
 #else
@@ -327,6 +322,7 @@ namespace SSD_Components
 					//std::cout << "cur_subpage_offset: " << cur_subpage_offset << std::endl;
 
 					if (block_manager->Is_Subpage_valid(block, cur_page_offset, cur_subpage_offset)) {
+
 						gc_candidate_address = gc_victim_address[victim_index];
 						gc_candidate_address.PageID = cur_page_offset;
 						gc_candidate_address.subPageID = cur_subpage_offset;
@@ -355,10 +351,12 @@ namespace SSD_Components
 							waiting_submit_transaction.push_back(gc_read);
 							total_gc_rw_interval_ER++;
 
+							/* js stream
 							if (gc_read->Stream_id != 0) {
 								std::cout << "[DOODU ERROR] Stream_id (read_pages()): " << gc_read->Stream_id << std::endl;
 								exit(1);
 							}
+							*/
 						}
 						read_count_subpg++;
 #if DEBUG_GC_READ
@@ -369,6 +367,7 @@ namespace SSD_Components
 					}
 #if DEBUG_GC_READ
 					else {
+						// js question : for what?
 						gc_candidate_address = gc_victim_address[victim_index];
 						gc_candidate_address.PageID = cur_page_offset;
 						gc_candidate_address.subPageID = cur_subpage_offset;
@@ -397,7 +396,6 @@ namespace SSD_Components
 
 		} //end of for (; cur_page_offset ; ;)
 
-
 		if (cur_page_offset == pages_no_per_block && cur_subpage_offset == ALIGN_UNIT_SIZE) {
 			read_subpg_offset_reaches_end = true;
 		}
@@ -413,7 +411,8 @@ namespace SSD_Components
 		//std::cout << "[before] waiting_submit_transaction: " << waiting_submit_transaction.size() << std::endl;
 
 #if try_combine_GCread
-		stable_sort(waiting_submit_transaction.begin(), waiting_submit_transaction.end(), cmp_gc);
+		//stable_sort(waiting_submit_transaction.begin(), waiting_submit_transaction.end(), cmp_gc);
+		waiting_submit_transaction.sort(cmp_gc);
 
 		if (waiting_submit_transaction.size() > 1) {
 			for (std::list<NVM_Transaction*>::const_iterator it = waiting_submit_transaction.begin(); it != waiting_submit_transaction.end(); it++) {
@@ -429,6 +428,7 @@ namespace SSD_Components
 						&& ((NVM_Transaction_Flash*)(*(next(it, idx))))->Address.DieID == ((NVM_Transaction_Flash*)(*it))->Address.DieID
 						&& ((NVM_Transaction_Flash*)(*(next(it, idx))))->Address.PlaneID == ((NVM_Transaction_Flash*)(*it))->Address.PlaneID) {
 
+						// js question: plane이 같을 때 같은 page에 작성 된다고 확신할 수 있나?
 						((NVM_Transaction_Flash_RD*)(*it))->RelatedRead_SUB.push_back(((NVM_Transaction_Flash_RD*)(*(next(it, idx)))));
 						waiting_submit_transaction.erase(next(it, idx));
 						idx--;
@@ -448,10 +448,16 @@ namespace SSD_Components
 			//exit(1); //flag1031
 		}
 
-		for (std::list<NVM_Transaction*>::const_iterator itr = waiting_submit_transaction.begin(); itr != waiting_submit_transaction.end(); itr++) {
-			tsu->Submit_transaction(((NVM_Transaction_Flash*)(*itr)));
-		}
-		for (std::list<NVM_Transaction*>::const_iterator itr = waiting_submit_transaction.begin(); itr != waiting_submit_transaction.end(); itr++) {
+		NVM_Transaction_Flash_WR* read_tr;
+
+		while (waiting_submit_transaction.size() != 0)
+		{
+			read_tr = (NVM_Transaction_Flash_WR*)(waiting_submit_transaction.front());
+			//std::cout << "write tr's ppa: " << write_tr->PPA << std::endl;
+			//address_mapping_unit->Allocate_new_page_for_gc(write_tr, false);
+
+			tsu->Submit_transaction(read_tr);
+
 			waiting_submit_transaction.pop_front();
 		}
 
@@ -591,6 +597,7 @@ namespace SSD_Components
 					cur_valid_subpage_count = get_valid_subpage_count(block_id);
 					//std::cout << "[DEBUG GC] blk id:"<<block_id<<", Valid subpg_cnt: " << cur_valid_subpage_count << ", Write idx: " << pbke->Blocks[block_id].Current_page_write_index << std::endl;
 
+					// js question : gc victim 선정할 때 stream 관련 확인은 없음
 					if ((cur_valid_subpage_count < min_valid_page_count) 
 						&& (pbke->Blocks[block_id].Current_page_write_index == pages_no_per_block)
 						&& is_safe_gc_wl_candidate(pbke, block_id)) {
@@ -598,6 +605,7 @@ namespace SSD_Components
 						min_valid_page_count = cur_valid_subpage_count;
 					}
 				}
+
 				break;
 			}
 			case SSD_Components::GC_Block_Selection_Policy_Type::RGA:
@@ -692,11 +700,14 @@ namespace SSD_Components
 						pbke = block_manager->Get_plane_bookkeeping_entry(plane_address);
 						Block_Pool_Slot_Type* block = &pbke->Blocks[gc_candidate_block_id];
 						victim_blocks[victim_count++] = block;
+
+						/* js stream
 						///std::cout << "[DEBUG GC] gc candidate id: " << gc_candidate_block_id<<", Cha,Chip,die,plane: "<<ch_idx<<", "<< chip_idx << ", "<<die_idx << ", " <<plane_idx  << std::endl;
 						if (block->Stream_id != 0) {
 							std::cout << "[ERROR] block->Stream_id ! =0 (select_victim_block()), block_id: "<< gc_candidate_block_id << std::endl;
 							exit(1);
 						}
+						*/
 
 						//valid_page_count += ((block->Current_page_write_index*ALIGN_UNIT_SIZE + block->Current_subpage_write_index) - (block->Invalid_subpage_count));
 						valid_page_count += ((block->Current_page_write_index * ALIGN_UNIT_SIZE) - (block->Invalid_subpage_count));
@@ -710,9 +721,11 @@ namespace SSD_Components
 
 								
 						//Run the state machine to protect against race condition
+						// js question : 여기선 모든 block들을 각각 넣어준다
 						block_manager->GC_WL_started(gc_candidate_address);
 						pbke->Ongoing_erase_operations.insert(gc_candidate_block_id);
 
+						// js question : what is this?
 						if (victim_count > 1)
 						{
 							if (victim_blocks[victim_count-1]->Stream_id != victim_blocks[victim_count-2]->Stream_id)
@@ -734,16 +747,14 @@ namespace SSD_Components
 		Stats::GC_count++;
 		if (Stats::GC_count % 100 == 0)
 		{
-			Stats::WAF[Stats::WAF_index] = (double)( (Stats::Physical_write_count - Stats::Prev_physical_write_count) - (Stats::Relief_page_count - Stats::Prev_relief_page_count))/(Stats::Host_write_count - Stats::Prev_host_write_count);
+			Stats::WAF[Stats::WAF_index] = (double)( (Stats::Physical_write_count - Stats::Prev_physical_write_count))/(Stats::Host_write_count - Stats::Prev_host_write_count);
 			Stats::WAI[Stats::WAF_index] = (double)(Stats::Physical_write_count - Stats::Prev_physical_write_count)/(Stats::Host_write_count - Stats::Prev_host_write_count);
-			Stats::Reliefed[Stats::WAF_index] = (double)Stats::Cur_relief_page_count/Stats::Physical_page_count;
 
 			WAI[Stats::WAF_index % 10] = Stats::WAI[Stats::WAF_index];
 			WAF[Stats::WAF_index % 10] = Stats::WAF[Stats::WAF_index];
 
 			Stats::Prev_physical_write_count = Stats::Physical_write_count;
 			Stats::Prev_host_write_count = Stats::Host_write_count;
-			Stats::Prev_relief_page_count = Stats::Relief_page_count;
 			Stats::WAF_index++;
 
 			//PRINT_MESSAGE(" WAF : " << WAF[0] <<" " << WAF[1] <<" " << WAF[2]<<" " << WAF[3]<<" " << WAF[4]<<" " << WAF[5]<<" " << WAF[6]<<" " << WAF[7]<<" " << WAF[8] <<" " << WAF[9]);
@@ -751,7 +762,7 @@ namespace SSD_Components
 			
 			//PRINT_MESSAGE("WAF index  " << Stats::WAF_index << " Is saturated " << is_WAF_saturated(g_diff) << " diff " << g_diff);
 
-			//select_relief_mode();
+	
 		}
 
 		cur_page_offset = 0;
@@ -854,196 +865,6 @@ namespace SSD_Components
 
 
 
-	void GC_and_WL_Unit_Page_Level::select_relief_mode()
-	{
-		static int cur_relief_mode = 0;
-		static int cur_saturation_count = 0;
-		static int cur_abnormal_cnt = 0;
-		static int pre_abnormal_WAF = 0;
-		
-		static int NAND_Endurance[] = {1000, 1100, 1150, 1180, 1200, 1210}; // Relief mode 1 +10%, Relief mode 2 +15%, Relief mode 3 - 18%...
-		static bool WAF_increased = false;
-		static int mode_start_index = 0;
-
-
-		bool WAF_transition  = false;
-		int next_relief_mode = cur_relief_mode;
-		double WAF_delta;
-		if (is_saturated == false)
-		{
-			return;
-		}
-
-		if (cur_saturation_count == 0){
-			mode_start_index = saturation_start_index;
-		}
-		cur_saturation_count++;
-
-		//update cur WAF
-		double average_WAF = 0;
-		for (int index = saturation_start_index; index < Stats::WAF_index; index++){
-			average_WAF += Stats::WAI[index];
-		}
-		average_WAF /= (Stats::WAF_index - saturation_start_index);
-							
-		// 1. WAF transition check between diff relief mode
-		if ((cur_relief_mode+1 < MAX_RELIEF_MODE) && (Stats::Relief_WAF_Table[cur_relief_mode+1] != 0)){
-			WAF_delta = Stats::Relief_WAF_Table[cur_relief_mode+1]/average_WAF;
-			if (WAF_delta -1 < minimum_mode_difference){
-				if (cur_saturation_count == 1){ 			
-					// after mode change. 
-					PRINT_MESSAGE(" --ignore first transition between diff relief mode: cur: " << cur_relief_mode << " next : "<< cur_relief_mode+1 << "  WAF " << average_WAF);
-					
-					//check WAF one more for new interval					
-					WAF_transiaction_period = Stats::WAF_index + 5;  // 5 or 10?
-					return;
-				} else {
-					WAF_transition = true;	
-					PRINT_MESSAGE(" --WAF TRANSITION between diff relief mode: cur: " << cur_relief_mode << " next : "<< cur_relief_mode+1 << "  WAF " << average_WAF);
-					
-					WAF_increased = true;
-				}
-			}
-		} 
-	
-		// 2. WAF transition check between diff relief mode
-		if ((cur_relief_mode != 0) && (Stats::Relief_WAF_Table[cur_relief_mode-1] != 0)){
-			WAF_delta = average_WAF/Stats::Relief_WAF_Table[cur_relief_mode-1];
-			if (WAF_delta -1 < minimum_mode_difference){
-				if (cur_saturation_count == 1){ 			
-					// after mode change. 
-					PRINT_MESSAGE(" --ignore first transition between diff relief mode: cur: " << cur_relief_mode << " prev : "<< cur_relief_mode-1 << "  WAF " << average_WAF);
-					
-					//check WAF one more for new interval					
-					WAF_transiaction_period = Stats::WAF_index + 5;  // 5 or 10?
-					return;
-				} else {
-					WAF_transition = true;	
-					PRINT_MESSAGE(" --WAF TRANSITION between diff relief mode: cur: " << cur_relief_mode << " prev : "<< cur_relief_mode-1<< "  WAF " << average_WAF);
-					WAF_increased = false;
-				}				
-			}
-		}
-
-
-		if (Stats::Relief_WAF_Table[cur_relief_mode] == 0){
-			Stats::Relief_WAF_Table[cur_relief_mode] = average_WAF;
-
-			PRINT_MESSAGE("first WAF update  mode " <<cur_relief_mode << "WAF : "<< average_WAF);
-		} else{ 		
-			// 1. WAF transition check between same relief mode
-			if ((average_WAF/Stats::Relief_WAF_Table[cur_relief_mode] -1 > saturation_criteria_delta) || (average_WAF/Stats::Relief_WAF_Table[cur_relief_mode] -1 < -saturation_criteria_delta)){
-				cur_abnormal_cnt++;
-				if (cur_abnormal_cnt > 1){
-					// gap is too big. 1. need to reset Relief WAF Table 2. try current mode again. 							
-					WAF_transition = true;	
-					PRINT_MESSAGE(" --WAF TRANSITION same relief mode:	" << cur_relief_mode << " WAF  " << average_WAF);
-					if (average_WAF > Stats::Relief_WAF_Table[cur_relief_mode]){
-						WAF_increased = true;
-					} else{
-						WAF_increased = false;
-					}
-
-					Stats::Relief_WAF_Table[cur_relief_mode] = average_WAF;
-				} else {
-					//check WAF one more for new interval					
-					WAF_transiaction_period = Stats::WAF_index + 5; 
-					
-					PRINT_MESSAGE("CHECK again, check again,  WAF " << average_WAF);
-					return;
-				}
-			} else {
-				// accumulated cur WAF
-				double accumulated_cur_WAF = 0;
-				for (int index = mode_start_index; index < Stats::WAF_index; index++){
-					accumulated_cur_WAF += Stats::WAI[index];
-				}
-				accumulated_cur_WAF /= (Stats::WAF_index - mode_start_index);
-
-				PRINT_MESSAGE("WAF update  mode " <<cur_relief_mode << "  accWAF "<< accumulated_cur_WAF << " curWAF	" <<average_WAF  << "  old WAF " << Stats::Relief_WAF_Table[cur_relief_mode]);							
-				Stats::Relief_WAF_Table[cur_relief_mode] = accumulated_cur_WAF;
-				cur_abnormal_cnt = 0;
-			}
-		}
-
-
-		if (WAF_transition == true){
-			for (unsigned int index = 0; index < MAX_RELIEF_MODE; index++){
-				if (index != cur_relief_mode){
-					Stats::Relief_WAF_Table[index] = 0;
-				}
-			}
-		} else{  //if (WAF_transition == false)
-			// TBW = Endurance/WAF;
-			double cur_TBW = NAND_Endurance[cur_relief_mode] / Stats::Relief_WAF_Table[cur_relief_mode];		
-			double next_TBW = 0;
-			double prev_TBW = 0;
-
-			// calculate TBW, Prev,Next
-			if ((cur_relief_mode+1 < MAX_RELIEF_MODE) && (Stats::Relief_WAF_Table[cur_relief_mode+1] != 0)){
-				next_TBW = NAND_Endurance[cur_relief_mode+1] / Stats::Relief_WAF_Table[cur_relief_mode+1];
-			}
-
-			if ((cur_relief_mode != 0) && (Stats::Relief_WAF_Table[cur_relief_mode-1] != 0)){
-				prev_TBW = NAND_Endurance[cur_relief_mode-1] / Stats::Relief_WAF_Table[cur_relief_mode-1];
-			}
-
-			if ((prev_TBW == 0) && (next_TBW == 0)){
-				if ((WAF_increased == false) && (cur_relief_mode+1 < MAX_RELIEF_MODE)){
-					next_TBW = cur_TBW + 1; // Need to try next relief mode
-					PRINT_MESSAGE("TRY NEXT A");
-				} else if (cur_relief_mode > 0){
-					prev_TBW = cur_TBW + 1; // Need to try prev relief mode
-					PRINT_MESSAGE("TRY PREV B");
-				}
-			} else if (prev_TBW == 0){
-				if ((cur_relief_mode != 0) && (cur_TBW > next_TBW)){
-					prev_TBW = cur_TBW + 1; // Need to try prev relief mode
-					PRINT_MESSAGE("TRY PREV C");
-				}
-			} else if (next_TBW == 0){
-				if ((cur_relief_mode+1 < MAX_RELIEF_MODE) && (cur_TBW > prev_TBW)){
-					next_TBW = cur_TBW + 1; // Need to try next relief mode
-					PRINT_MESSAGE("TRY NEXT D");
-				}
-			}
-
-			// Compare TBW
-			if (prev_TBW > cur_TBW){				
-				next_relief_mode = cur_relief_mode - 1; 
-
-				if (Stats::Relief_WAF_Table[cur_relief_mode-1] != 0){
-					PRINT_MESSAGE("<-- TBW COMPARE	prev: " <<prev_TBW << " cur  : " << cur_TBW << " next_relief mode : " << next_relief_mode);
-				} else{
-					PRINT_MESSAGE("<-- without COMPARE	" << "	next_relief mode : " << next_relief_mode);
-				}
-			} else if (next_TBW > cur_TBW){
-				next_relief_mode = cur_relief_mode + 1; 
-
-				if (Stats::Relief_WAF_Table[cur_relief_mode+1] != 0){
-					PRINT_MESSAGE("--> TBW COMPARE	cur: " <<cur_TBW << " next	: " << next_TBW << " next_relief mode : " << next_relief_mode);
-				} else{
-					PRINT_MESSAGE("--> without COMPARE	" << "	next_relief mode : " << next_relief_mode);
-				}
-			}
-		}
-
-		if ((cur_relief_mode != next_relief_mode) || (WAF_transition == true)){
-			is_saturated = false;
-			cumulative_count = 0;
-			cur_relief_mode = next_relief_mode;
-
-			WAF_transiaction_period = Stats::WAF_index + 10;
-
-			Stats::Interval_Relief_page_count = 0;
-			Stats::Interval_Physical_write_count = 0;
-
-			cur_saturation_count = 0;
-			cur_abnormal_cnt = 0;
-		}
-
-		Stats::Relief_proportion = (double)next_relief_mode*3/256;// 1 WL per block
-	}
 }
 	
 

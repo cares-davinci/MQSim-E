@@ -318,6 +318,9 @@ namespace SSD_Components
 
 	bool GC_and_WL_Unit_Base::Consume_token(int token_count)
 	{
+		//js debug: fbm debugging
+		block_manager->debugging();
+
 		// when the free block is enough - it always returns true.		
 		bool consume_token = true;
 		PlaneBookKeepingType* pbke = &(block_manager->plane_manager[0][0][0][0]);
@@ -367,9 +370,10 @@ namespace SSD_Components
 			}
 		}
 
+		// js question : this check only one plane
 		//The block shouldn't have an ongoing program request (all pages must already be written)
 		if (plane_record->Blocks[gc_wl_candidate_block_id].Ongoing_user_program_count > 0) {
-			std::cout << "flag1: "<< plane_record->Blocks[gc_wl_candidate_block_id].Ongoing_user_program_count << std::endl;
+			//std::cout << "flag1: "<< plane_record->Blocks[gc_wl_candidate_block_id].Ongoing_user_program_count << std::endl;
 			return false;
 		}
 

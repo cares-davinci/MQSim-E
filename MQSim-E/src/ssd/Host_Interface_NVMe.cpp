@@ -166,6 +166,8 @@ namespace SSD_Components
 			LHA_type internal_lsa = lsa - ((Input_Stream_NVMe*)input_streams[user_request->Stream_id])->Start_logical_sector_address;//For each flow, all lsa's should be translated into a range starting from zero
 			
 #if PATCH_SEGMENT_REQ
+			/*
+			// js question => 삭제 예정
 			LPA_type lpa;
 			if (user_request->Type == UserRequestType::READ) {
 				transaction_size = host_interface->sectors_per_subpage - (unsigned int)(lsa % host_interface->sectors_per_subpage);
@@ -190,6 +192,16 @@ namespace SSD_Components
 				//printf("access_status_bitmap: %lx", access_status_bitmap);
 			}
 			//std::cout << "tr size: " << transaction_size << std::endl;
+			*/
+			transaction_size = host_interface->sectors_per_subpage - (unsigned int)(lsa % host_interface->sectors_per_subpage);
+			if (hanled_sectors_count + transaction_size >= req_size) {
+				transaction_size = req_size - hanled_sectors_count;
+			}
+			LPA_type lpa = internal_lsa / host_interface->sectors_per_subpage;
+
+			page_status_type temp = ~(0xffffffffffffffff << (int)transaction_size); // 
+			access_status_bitmap = temp << (int)(internal_lsa % host_interface->sectors_per_subpage); //write_sectors_bitmap
+			//printf("access_status_bitmap: %lx", access_status_bitmap);
 #else
 			transaction_size = host_interface->sectors_per_page - (unsigned int)(lsa % host_interface->sectors_per_page);
 			if (hanled_sectors_count + transaction_size >= req_size) {
